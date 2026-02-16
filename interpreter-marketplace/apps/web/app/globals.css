@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --container: 72rem;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 antialiased;
+}
+
+* {
+  @apply focus-visible:outline-none;
+}
+
+.container-page {
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: 1rem;
+}

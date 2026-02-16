@@ -1,0 +1,13 @@
+{
+  "name": "interpreter-marketplace",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @im/web",
+    "dev:api": "npm run dev -w @im/api",
+    "build": "npm run build -ws",
+    "lint": "npm run lint -ws"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "home": {
+    "title": "سوق المترجمين",
+    "subtitle": "ابحث واحجز مترجمين موثوقين عبر لغات ومجالات متعددة."
+  },
+  "auth": {
+    "login": "تسجيل الدخول",
+    "register": "إنشاء حساب",
+    "verifyEmail": "تأكيد البريد الإلكتروني",
+    "fullName": "الاسم الكامل",
+    "email": "البريد الإلكتروني",
+    "password": "كلمة المرور",
+    "role": "الدور",
+    "client": "عميل",
+    "interpreter": "مترجم",
+    "verificationToken": "رمز التحقق"
+  },
+  "search": {
+    "title": "ابحث عن مترجمين",
+    "filters": "الفلاتر",
+    "languages": "اللغات",
+    "domains": "المجالات",
+    "cities": "المدن",
+    "applyFilters": "تطبيق الفلاتر",
+    "viewProfile": "عرض الملف"
+  }
+}

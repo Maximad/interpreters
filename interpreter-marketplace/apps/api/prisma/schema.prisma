@@ -1,0 +1,238 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CLIENT
+  INTERPRETER
+  ADMIN
+}
+
+enum RequestStatus {
+  OPEN
+  FILLED
+  CLOSED
+}
+
+enum InquiryStatus {
+  NEW
+  CONTACTED
+  ARCHIVED
+}
+
+enum ProfileStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum QuoteStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum NotificationChannel {
+  EMAIL
+  DASHBOARD
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model User {
+  id                        String                    @id @default(cuid())
+  email                     String                    @unique
+  password_hash             String
+  full_name                 String
+  role                      UserRole                  @default(CLIENT)
+  is_email_verified         Boolean                   @default(false)
+  created_at                DateTime                  @default(now())
+  updated_at                DateTime                  @updatedAt
+  email_verification_tokens EmailVerificationToken[]
+  interpreter_profile       InterpreterProfile?
+  requests                  Request[]
+  quotes                    Quote[]
+  direct_inquiries          DirectInquiry[]           @relation("DirectInquiryClient")
+  notifications             Notification[]
+}
+
+model EmailVerificationToken {
+  id          String   @id @default(cuid())
+  user_id     String
+  token       String   @unique
+  expires_at  DateTime
+  consumed_at DateTime?
+  created_at  DateTime @default(now())
+  user        User     @relation(fields: [user_id], references: [id])
+
+  @@index([user_id])
+}
+
+model InterpreterProfile {
+  id                        String               @id @default(cuid())
+  user_id                   String               @unique
+  headline                  String?
+  bio                       String?
+  years_experience          Int                  @default(0)
+  hourly_rate_aed           Decimal?             @db.Decimal(10, 2)
+  availability_notes        String?
+  onsite_enabled            Boolean              @default(false)
+  remote_enabled            Boolean              @default(true)
+  opt_out_broadcast_emails  Boolean              @default(false)
+  profile_completeness      Int                  @default(0)
+  status                    ProfileStatus        @default(DRAFT)
+  rejection_reason          String?
+  submitted_at              DateTime?
+  reviewed_at               DateTime?
+  created_at                DateTime             @default(now())
+  updated_at                DateTime             @updatedAt
+  user                      User                 @relation(fields: [user_id], references: [id])
+  languages                 InterpreterLanguage[]
+  domains                   InterpreterDomain[]
+  cities                    InterpreterCity[]
+  quotes                    Quote[]
+  inquiries_received        DirectInquiry[]      @relation("DirectInquiryInterpreter")
+  certifications            Certification[]
+  recipients                RequestRecipient[]
+}
+
+model Certification {
+  id                     String             @id @default(cuid())
+  interpreter_profile_id String
+  name                   String
+  file_url               String
+  is_private             Boolean            @default(true)
+  created_at             DateTime           @default(now())
+  interpreter_profile    InterpreterProfile @relation(fields: [interpreter_profile_id], references: [id])
+}
+
+model Language {
+  id           Int                   @id @default(autoincrement())
+  name         String                @unique
+  interpreters InterpreterLanguage[]
+}
+
+model Domain {
+  id           Int                 @id @default(autoincrement())
+  name         String              @unique
+  interpreters InterpreterDomain[]
+}
+
+model City {
+  id           Int               @id @default(autoincrement())
+  name         String            @unique
+  interpreters InterpreterCity[]
+}
+
+model InterpreterLanguage {
+  interpreter_profile_id String
+  language_id            Int
+  direction              String
+  proficiency_level      String?
+  interpreter_profile    InterpreterProfile @relation(fields: [interpreter_profile_id], references: [id])
+  language               Language           @relation(fields: [language_id], references: [id])
+
+  @@id([interpreter_profile_id, language_id, direction])
+}
+
+model InterpreterDomain {
+  interpreter_profile_id String
+  domain_id              Int
+  interpreter_profile    InterpreterProfile @relation(fields: [interpreter_profile_id], references: [id])
+  domain                 Domain             @relation(fields: [domain_id], references: [id])
+
+  @@id([interpreter_profile_id, domain_id])
+}
+
+model InterpreterCity {
+  interpreter_profile_id String
+  city_id                Int
+  interpreter_profile    InterpreterProfile @relation(fields: [interpreter_profile_id], references: [id])
+  city                   City               @relation(fields: [city_id], references: [id])
+
+  @@id([interpreter_profile_id, city_id])
+}
+
+model Request {
+  id                 String             @id @default(cuid())
+  client_user_id     String
+  source_language    String
+  target_language    String
+  domain             String
+  city               String
+  onsite_required    Boolean            @default(false)
+  remote_allowed     Boolean            @default(true)
+  budget_min_aed     Decimal?           @db.Decimal(10, 2)
+  budget_max_aed     Decimal?           @db.Decimal(10, 2)
+  scheduled_for      DateTime
+  notes              String?
+  status             RequestStatus      @default(OPEN)
+  filled_quote_id    String?
+  created_at         DateTime           @default(now())
+  client             User               @relation(fields: [client_user_id], references: [id])
+  recipients         RequestRecipient[]
+  quotes             Quote[]
+}
+
+model RequestRecipient {
+  id                     String             @id @default(cuid())
+  request_id             String
+  interpreter_profile_id String
+  sent_at                DateTime           @default(now())
+  notified_at            DateTime?
+  request                Request            @relation(fields: [request_id], references: [id])
+  interpreter_profile    InterpreterProfile @relation(fields: [interpreter_profile_id], references: [id])
+
+  @@unique([request_id, interpreter_profile_id])
+}
+
+model Quote {
+  id                     String             @id @default(cuid())
+  request_id             String
+  interpreter_profile_id String
+  client_user_id         String
+  amount_aed             Decimal            @db.Decimal(10, 2)
+  status                 QuoteStatus        @default(PENDING)
+  message                String?
+  created_at             DateTime           @default(now())
+  request                Request            @relation(fields: [request_id], references: [id])
+  interpreter_profile    InterpreterProfile @relation(fields: [interpreter_profile_id], references: [id])
+  client                 User               @relation(fields: [client_user_id], references: [id])
+}
+
+model DirectInquiry {
+  id                     String             @id @default(cuid())
+  client_user_id         String
+  interpreter_profile_id String
+  message                String
+  details                String?
+  status                 InquiryStatus      @default(NEW)
+  created_at             DateTime           @default(now())
+  client                 User               @relation("DirectInquiryClient", fields: [client_user_id], references: [id])
+  interpreter_profile    InterpreterProfile @relation("DirectInquiryInterpreter", fields: [interpreter_profile_id], references: [id])
+}
+
+model Notification {
+  id          String             @id @default(cuid())
+  user_id     String
+  channel     NotificationChannel
+  category    String
+  payload     Json
+  status      NotificationStatus @default(PENDING)
+  is_read     Boolean            @default(false)
+  created_at  DateTime           @default(now())
+  sent_at     DateTime?
+  user        User               @relation(fields: [user_id], references: [id])
+
+  @@index([user_id, created_at])
+}
