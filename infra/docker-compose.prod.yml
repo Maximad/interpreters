@@ -1,12 +1,12 @@
 services:
   nginx:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-your-org/interpreters}/nginx:${IMAGE_TAG:-latest}
+    image: ${IMAGE_NGINX:-ghcr.io/your-org/interpreters-nginx:latest}
     restart: unless-stopped
 
   web:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-your-org/interpreters}/web:${IMAGE_TAG:-latest}
+    image: ${IMAGE_WEB:-ghcr.io/your-org/interpreters-web:latest}
     restart: unless-stopped
 
   api:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-your-org/interpreters}/api:${IMAGE_TAG:-latest}
+    image: ${IMAGE_API:-ghcr.io/your-org/interpreters-api:latest}
     restart: unless-stopped

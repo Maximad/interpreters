@@ -20,7 +20,7 @@ Copy `.env.example` to `.env` and set real values:
 - `JWT_EXPIRES_IN` (example: `1h`)
 - `CORS_ORIGINS` (comma-separated production origins)
 - `MEILI_MASTER_KEY`
-- `IMAGE_REGISTRY`, `IMAGE_NAMESPACE`, `IMAGE_TAG` (for image pull target)
+- `IMAGE_API`, `IMAGE_WEB`, `IMAGE_NGINX` (public image tags to pull)
 
 Never commit real secrets.
 

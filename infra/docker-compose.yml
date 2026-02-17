@@ -1,21 +1,18 @@
 services:
   nginx:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-your-org/interpreters}/nginx:${IMAGE_TAG:-latest}
+    image: ${IMAGE_NGINX:-ghcr.io/your-org/interpreters-nginx:latest}
+    container_name: interpreters-nginx
     restart: unless-stopped
     depends_on:
       api:
         condition: service_healthy
       web:
         condition: service_healthy
-    expose:
-      - "8080"
     networks:
-      default: {}
-      proxy:
-        aliases:
-          - interpreters-nginx
+      - default
+      - proxy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -27,11 +24,11 @@ services:
         max-file: "3"
 
   web:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-your-org/interpreters}/web:${IMAGE_TAG:-latest}
+    image: ${IMAGE_WEB:-ghcr.io/your-org/interpreters-web:latest}
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
     depends_on:
       api:
         condition: service_healthy
@@ -44,15 +41,17 @@ services:
     logging: *default-logging
 
   migrate:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-your-org/interpreters}/api:${IMAGE_TAG:-latest}
+    image: ${IMAGE_API:-ghcr.io/your-org/interpreters-api:latest}
     restart: "no"
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
-      REDIS_URL: redis://redis:6379
-      MEILISEARCH_URL: http://meilisearch:7700
+      REDIS_URL: ${REDIS_URL}
+      MEILISEARCH_URL: ${MEILISEARCH_URL}
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY}
+      MEILISEARCH_INTERPRETERS_INDEX: ${MEILISEARCH_INTERPRETERS_INDEX}
     command: ["npm", "run", "prisma:migrate"]
     depends_on:
       postgres:
@@ -60,25 +59,26 @@ services:
     logging: *default-logging
 
   api:
-    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-your-org/interpreters}/api:${IMAGE_TAG:-latest}
+    image: ${IMAGE_API:-ghcr.io/your-org/interpreters-api:latest}
     restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 4000
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
       CORS_ORIGINS: ${CORS_ORIGINS}
-      REDIS_URL: redis://redis:6379
-      MEILISEARCH_URL: http://meilisearch:7700
-      MEILISEARCH_API_KEY: ${MEILI_MASTER_KEY}
+      REDIS_URL: ${REDIS_URL}
+      MEILISEARCH_URL: ${MEILISEARCH_URL}
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY}
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
-      SEARCH_SYNC_INTERVAL_MS: ${SEARCH_SYNC_INTERVAL_MS:-30000}
-      NOTIFICATION_QUEUE_INTERVAL_MS: ${NOTIFICATION_QUEUE_INTERVAL_MS:-10000}
-      NOTIFICATION_BATCH_SIZE: ${NOTIFICATION_BATCH_SIZE:-50}
-      DAILY_DIRECT_INQUIRY_LIMIT: ${DAILY_DIRECT_INQUIRY_LIMIT:-30}
-      DAILY_BROADCAST_LIMIT: ${DAILY_BROADCAST_LIMIT:-20}
-      BROADCAST_RECIPIENT_CAP: ${BROADCAST_RECIPIENT_CAP:-50}
+      MEILISEARCH_INTERPRETERS_INDEX: ${MEILISEARCH_INTERPRETERS_INDEX}
+      SEARCH_SYNC_INTERVAL_MS: ${SEARCH_SYNC_INTERVAL_MS}
+      NOTIFICATION_QUEUE_INTERVAL_MS: ${NOTIFICATION_QUEUE_INTERVAL_MS}
+      NOTIFICATION_BATCH_SIZE: ${NOTIFICATION_BATCH_SIZE}
+      DAILY_DIRECT_INQUIRY_LIMIT: ${DAILY_DIRECT_INQUIRY_LIMIT}
+      DAILY_BROADCAST_LIMIT: ${DAILY_BROADCAST_LIMIT}
+      BROADCAST_RECIPIENT_CAP: ${BROADCAST_RECIPIENT_CAP}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -106,13 +106,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-interpreter_marketplace}
+      POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-interpreter_marketplace}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10

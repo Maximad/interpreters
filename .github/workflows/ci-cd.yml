@@ -69,11 +69,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/api
           tags: |
-            type=sha,format=short
+            type=sha,format=short,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
 
       - name: Extract Docker metadata (web)
         id: meta_web
@@ -81,11 +79,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/web
           tags: |
-            type=sha,format=short
+            type=sha,format=short,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
 
       - name: Extract Docker metadata (nginx)
         id: meta_nginx
@@ -93,11 +89,9 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/nginx
           tags: |
-            type=sha,format=short
+            type=sha,format=short,prefix=sha-
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=tag
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
 
       - name: Build and push api image
         uses: docker/build-push-action@v6
@@ -125,3 +119,10 @@ jobs:
           push: true
           tags: ${{ steps.meta_nginx.outputs.tags }}
           labels: ${{ steps.meta_nginx.outputs.labels }}
+
+      - name: Publish image references
+        run: |
+          echo "IMAGE_API=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/api:sha-${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+          echo "IMAGE_WEB=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/web:sha-${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+          echo "IMAGE_NGINX=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/nginx:sha-${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Also published: latest (main only) and git tag refs." >> "$GITHUB_STEP_SUMMARY"

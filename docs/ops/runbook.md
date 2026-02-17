@@ -78,15 +78,15 @@ Restore uses standard PostgreSQL dump restore into the `postgres` service.
 
 TLS termination is handled by the **existing VPS gateway proxy**.
 
-- Domain: `APP_DOMAIN` / your configured host
+- Domain: `interpreters.jwtalenthouse.com` (or your configured host)
 - Upstream service: `interpreters-nginx`
-- Upstream port: `8080`
+- Upstream port: `80`
 - TLS: terminated at gateway, backend traffic on Docker network
 
 Use `infra/Caddyfile.interpreters` as a reference route:
 
 ```caddy
 interpreters.jwtalenthouse.com {
-  reverse_proxy interpreters-nginx:8080
+  reverse_proxy interpreters-nginx:80
 }
 ```
