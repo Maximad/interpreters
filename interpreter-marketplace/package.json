@@ -8,6 +8,9 @@
     "dev:web": "npm run dev -w @im/web",
     "dev:api": "npm run dev -w @im/api",
     "build": "npm run build -ws",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "lint:ci": "CI=true npm run lint",
+    "build:web:docker": "npm run build -w @im/web",
+    "compose:verify": "./scripts/verify-compose.sh"
   }
 }
