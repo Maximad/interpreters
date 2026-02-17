@@ -52,8 +52,8 @@ Then run certbot (first-time issuance):
 
 ```bash
 cd infra
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d nginx
-docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm certbot certonly \
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.vps.yml up -d nginx
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.vps.yml run --rm certbot certonly \
   --webroot -w /var/www/certbot \
   -d your-domain.com \
   --email you@example.com --agree-tos --no-eff-email
@@ -68,9 +68,18 @@ cd /opt/interpreter-marketplace
 
 `deploy.sh` is idempotent and performs:
 1. `git fetch/reset` to `origin/main`
-2. `docker compose build`
+2. `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml -f infra/docker-compose.vps.yml build`
 3. `prisma migrate deploy` in a one-off API container (before restart)
-4. `docker compose up -d --remove-orphans`
+4. `docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml -f infra/docker-compose.vps.yml up -d --remove-orphans`
+
+### 4) Post-deploy verification
+
+Confirm VPS network aliases resolve and both app services are healthy:
+
+```bash
+cd /opt/interpreter-marketplace
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml -f infra/docker-compose.vps.yml exec nginx getent hosts interpreters-web interpreters-api
+```
 
 ## GitHub Actions CI/CD
 
