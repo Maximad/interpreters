@@ -25,6 +25,7 @@ services:
       - PORT=4000
       - DATABASE_URL=${DATABASE_URL}
       - JWT_SECRET=${JWT_SECRET}
+      - CORS_ORIGINS=${CORS_ORIGINS}
       - REDIS_URL=redis://redis:6379
       - MEILISEARCH_URL=http://meilisearch:7700
       - SEARCH_SYNC_INTERVAL_MS=30000
