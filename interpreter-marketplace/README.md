@@ -10,6 +10,13 @@ TypeScript monorepo for an interpreter marketplace MVP.
 - `infra/docker-compose.prod.yml`: production override (restart policies + resource limits)
 - `infra/nginx.prod.conf`: HTTPS reverse-proxy config for VPS
 
+## Required API environment variables
+
+Set these in your API environment (for local `.env`, Docker secrets, or deployment env):
+
+- `JWT_SECRET`: secret used to sign and verify JWT access tokens.
+- `JWT_EXPIRES_IN`: access-token TTL used by Fastify JWT sign defaults (example: `1h`, `15m`, `7d`).
+
 ## Run locally
 
 ```bash
