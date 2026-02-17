@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR=${PROJECT_DIR:-/opt/interpreter-marketplace}
-BACKUP_DIR=${BACKUP_DIR:-/var/backups/interpreter-marketplace}
+PROJECT_DIR=${PROJECT_DIR:-/opt/interpreters}
+BACKUP_DIR=${BACKUP_DIR:-/var/backups/interpreters}
 RETENTION_DAYS=${RETENTION_DAYS:-14}
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 

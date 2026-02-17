@@ -1,5 +1,5 @@
 {
-  "name": "interpreter-marketplace",
+  "name": "interpreters",
   "private": true,
   "workspaces": [
     "apps/*"

@@ -14,8 +14,8 @@ The deploy script validates both files, renders merged config, and checks proxy 
 1. Clone and configure env:
 
 ```bash
-git clone <repo-url> /opt/interpreter-marketplace
-cd /opt/interpreter-marketplace
+git clone <repo-url> /opt/interpreters
+cd /opt/interpreters
 cp .env.example .env
 # fill all required variables
 ```
@@ -56,7 +56,7 @@ make restart
 Rollback to previous git commit:
 
 ```bash
-cd /opt/interpreter-marketplace
+cd /opt/interpreters
 git log --oneline -n 5
 git reset --hard <previous_commit_sha>
 make deploy
@@ -65,14 +65,14 @@ make deploy
 ## Backups
 
 ```bash
-PROJECT_DIR=/opt/interpreter-marketplace ./scripts/backup.sh
+PROJECT_DIR=/opt/interpreters ./scripts/backup.sh
 ```
 
 Restore uses standard PostgreSQL dump restore into the `postgres` service.
 
 ## Disk usage reality
 
-Deleting `/opt/interpreter-marketplace` **does not remove** system packages like Docker Engine, Node, npm, or system logs.
+Deleting `/opt/interpreters` **does not remove** system packages like Docker Engine, Node, npm, or system logs.
 
 The main long-term disk consumers are usually:
 - Docker images/layers
