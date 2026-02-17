@@ -7,7 +7,16 @@ export default fp(async function authPlugin(fastify) {
   fastify.decorate('authenticate', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       await request.jwtVerify();
-    } catch {
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'FST_JWT_AUTHORIZATION_TOKEN_EXPIRED'
+      ) {
+        return reply.status(401).send({ message: 'Unauthorized' });
+      }
+
       return reply.status(401).send({ message: 'Unauthorized' });
     }
   });
