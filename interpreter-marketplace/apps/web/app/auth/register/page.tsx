@@ -27,7 +27,7 @@ export default function RegisterPage() {
       return;
     }
 
-    setMessage(`Account created. Verification token (dev): ${data.verificationToken}`);
+    setMessage(data.message || 'Account created. Please check your email to verify your account.');
   }
 
   return (
