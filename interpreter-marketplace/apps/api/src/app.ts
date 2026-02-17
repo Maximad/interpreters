@@ -20,7 +20,12 @@ export function buildApp() {
   const app = Fastify({ logger: true });
 
   app.register(cors, { origin: true });
-  app.register(jwt, { secret: process.env.JWT_SECRET || 'dev-secret' });
+  app.register(jwt, {
+    secret: process.env.JWT_SECRET || 'dev-secret',
+    sign: {
+      expiresIn: process.env.JWT_EXPIRES_IN || '1h'
+    }
+  });
   app.register(authPlugin);
   app.register(meilisearchPlugin);
 
