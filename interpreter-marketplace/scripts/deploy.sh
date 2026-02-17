@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROJECT_DIR=${PROJECT_DIR:-/opt/interpreter-marketplace}
-COMPOSE_FILES="-f infra/docker-compose.yml -f infra/docker-compose.prod.yml"
+COMPOSE_FILES="-f infra/docker-compose.yml -f infra/docker-compose.prod.yml -f infra/docker-compose.vps.yml"
 
 cd "$PROJECT_DIR"
 
