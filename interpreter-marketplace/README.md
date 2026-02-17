@@ -39,6 +39,13 @@ cd /opt/interpreter-marketplace
 cp .env.example .env   # fill with production secrets
 ```
 
+Set production environment values in `.env` (at minimum):
+
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `MEILI_MASTER_KEY`
+- `CORS_ORIGINS` (comma-separated, e.g. `https://your-domain.com,https://www.your-domain.com`)
+
 Copy logrotate config once:
 
 ```bash

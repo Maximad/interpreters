@@ -23,6 +23,7 @@ services:
     environment:
       MEILISEARCH_API_KEY: ${MEILI_MASTER_KEY}
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      CORS_ORIGINS: ${CORS_ORIGINS}
     networks:
       default: {}
       proxy:

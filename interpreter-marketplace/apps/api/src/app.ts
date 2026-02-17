@@ -13,19 +13,27 @@ import { syncApprovedInterpreterProfiles } from './utils/search-index';
 import { inquiryRoutes } from './routes/inquiries';
 import { notificationRoutes } from './routes/notifications';
 import { requestRoutes } from './routes/requests';
+import { isCorsOriginAllowed, parseCorsOrigins } from './utils/cors';
 
 dotenv.config();
 
 export function buildApp() {
   const app = Fastify({ logger: true });
 
-  app.register(cors, { origin: true });
-  app.register(jwt, {
-    secret: process.env.JWT_SECRET || 'dev-secret',
-    sign: {
-      expiresIn: process.env.JWT_EXPIRES_IN || '1h'
+  const isProduction = process.env.NODE_ENV === 'production';
+  const allowedOrigins = new Set(parseCorsOrigins(process.env.CORS_ORIGINS));
+
+  app.register(cors, {
+    origin: (origin, callback) => {
+      if (isCorsOriginAllowed(origin, allowedOrigins, isProduction)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error('Origin not allowed by CORS'), false);
     }
   });
+  app.register(jwt, { secret: process.env.JWT_SECRET || 'dev-secret' });
   app.register(authPlugin);
   app.register(meilisearchPlugin);
 
