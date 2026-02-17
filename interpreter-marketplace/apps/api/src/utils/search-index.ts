@@ -67,17 +67,46 @@ export async function syncApprovedInterpreterProfiles(prisma: PrismaClient, meil
 
   const docs = profiles.map(toDoc);
   const index = meiliClient.index(indexName);
+  const approvedIds = new Set(docs.map((doc: InterpreterSearchDoc) => doc.id));
 
   console.info(`[search-sync] Starting full sync for ${indexName} with ${docs.length} approved profiles`);
-  const deleteTask = await index.deleteAllDocuments();
-  await meiliClient.waitForTask(deleteTask.taskUid);
-  console.info(`[search-sync] deleteAllDocuments completed for ${indexName}`);
+
+  let staleIds: string[] = [];
+  try {
+    const indexedIds: string[] = [];
+    let offset = 0;
+    const limit = 1000;
+
+    while (true) {
+      const response = await index.getDocuments<{ id: string }>({
+        fields: ['id'],
+        limit,
+        offset
+      });
+
+      indexedIds.push(...response.results.map((doc) => doc.id));
+      if (response.results.length < limit) {
+        break;
+      }
+
+      offset += limit;
+    }
+
+    staleIds = indexedIds.filter((id) => !approvedIds.has(id));
+    if (staleIds.length > 0) {
+      const deleteTask = await index.deleteDocuments(staleIds);
+      await meiliClient.waitForTask(deleteTask.taskUid);
+    }
+    console.info(`[search-sync] stale document cleanup completed for ${indexName}; stale deletions=${staleIds.length}`);
+  } catch (error) {
+    console.error(`[search-sync] Failed to fetch indexed ids for ${indexName}; skipping stale deletions`, error);
+  }
 
   const addTask = await index.addDocuments(docs, { primaryKey: 'id' });
-  console.info(`[search-sync] addDocuments enqueued for ${indexName} with task ${addTask.taskUid}`);
+  console.info(`[search-sync] addDocuments enqueued for ${indexName} with task ${addTask.taskUid}; upserts=${docs.length}`);
   await meiliClient.waitForTask(addTask.taskUid);
-  console.info(`[search-sync] addDocuments completed for ${indexName}`);
-  console.info(`[search-sync] Full sync completed for ${indexName}`);
+  console.info(`[search-sync] addDocuments completed for ${indexName}; upserts=${docs.length}`);
+  console.info(`[search-sync] Full sync completed for ${indexName}; stale deletions=${staleIds.length}; upserts=${docs.length}`);
 }
 
 export async function upsertInterpreterProfileToIndex(
