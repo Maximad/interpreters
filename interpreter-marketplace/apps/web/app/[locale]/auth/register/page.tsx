@@ -1,7 +1,6 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
 import { Button } from '../../../../components/ui/button';
@@ -12,7 +11,6 @@ const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 export default function RegisterPage() {
   const t = useTranslations('auth');
   const { showToast } = useToast();
-  const [verificationToken, setVerificationToken] = useState('');
 
   async function handleSubmit(formData: FormData) {
     const payload = {
@@ -34,7 +32,6 @@ export default function RegisterPage() {
       return;
     }
 
-    setVerificationToken(data.verificationToken || '');
     showToast({ title: t('successTitle'), description: t('registerSuccess') });
   }
 
@@ -54,7 +51,6 @@ export default function RegisterPage() {
         </div>
         <Button className="w-full" type="submit">{t('register')}</Button>
       </form>
-      {verificationToken ? <p className="mt-3 text-xs text-slate-600">{t('verificationToken')}: {verificationToken}</p> : null}
     </section>
   );
 }

@@ -48,9 +48,12 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       }
     });
 
+    if (process.env.NODE_ENV !== 'production') {
+      app.log.info({ email, token }, 'Email verification token generated for local testing');
+    }
+
     return {
-      message: 'Account created. Verify email to login.',
-      verificationToken: token
+      message: 'Account created. Please check your email to verify your account.'
     };
   });
 
