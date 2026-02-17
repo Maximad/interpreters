@@ -12,6 +12,7 @@ services:
     restart: unless-stopped
     mem_limit: 768m
     cpus: 1.00
+    command: ["npm", "run", "start"]
     environment:
       - NODE_ENV=production
 
