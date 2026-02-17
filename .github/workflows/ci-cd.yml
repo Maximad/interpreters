@@ -1,16 +1,20 @@
-name: CI-CD
+name: CI and Image Publish
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+    tags:
+      - 'v*'
   workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository }}
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: interpreter-marketplace
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,16 +23,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: |
-            interpreter-marketplace/package.json
-            interpreter-marketplace/apps/api/package.json
-            interpreter-marketplace/apps/web/package.json
+          cache: npm
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Prisma validate
+      - name: Prisma generate
         run: npm run prisma:generate -w @im/api
 
       - name: Lint (non-interactive)
@@ -40,20 +40,89 @@ jobs:
       - name: Type/build check
         run: npm run build
 
-  deploy:
+  build-and-push-images:
     runs-on: ubuntu-latest
     needs: build-and-test
-    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
     steps:
-      - name: Deploy over SSH to Hostinger VPS
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: ${{ secrets.VPS_PORT || 22 }}
-          script: |
-            export PROJECT_DIR="${{ secrets.VPS_PROJECT_DIR }}"
-            export BRANCH="main"
-            cd "$PROJECT_DIR"
-            ./scripts/deploy.sh
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (api)
+        id: meta_api
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/api
+          tags: |
+            type=sha,format=short,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+
+      - name: Extract Docker metadata (web)
+        id: meta_web
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/web
+          tags: |
+            type=sha,format=short,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+
+      - name: Extract Docker metadata (nginx)
+        id: meta_nginx
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/nginx
+          tags: |
+            type=sha,format=short,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=tag
+
+      - name: Build and push api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ${{ steps.meta_api.outputs.tags }}
+          labels: ${{ steps.meta_api.outputs.labels }}
+
+      - name: Build and push web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ steps.meta_web.outputs.tags }}
+          labels: ${{ steps.meta_web.outputs.labels }}
+
+      - name: Build and push nginx image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/nginx.Dockerfile
+          push: true
+          tags: ${{ steps.meta_nginx.outputs.tags }}
+          labels: ${{ steps.meta_nginx.outputs.labels }}
+
+      - name: Publish image references
+        run: |
+          echo "IMAGE_API=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/api:sha-${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+          echo "IMAGE_WEB=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/web:sha-${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+          echo "IMAGE_NGINX=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/nginx:sha-${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Also published: latest (main only) and git tag refs." >> "$GITHUB_STEP_SUMMARY"

@@ -7,7 +7,7 @@ TypeScript monorepo for an interpreter marketplace MVP.
 - `apps/web`: Next.js App Router + Tailwind UI + auth/profile/search + dashboards
 - `apps/api`: Fastify API with Zod validation, Prisma, JWT auth, RBAC, and Meilisearch-backed search
 - `infra/docker-compose.yml`: base services
-- `infra/docker-compose.vps.yml`: required VPS overrides (production env, network aliases, restart policy)
+- `infra/docker-compose.vps.yml`: optional VPS resource overrides
 - `docs/ops/runbook.md`: deployment + operations runbook
 
 ## Required environment variables
@@ -20,6 +20,7 @@ Copy `.env.example` to `.env` and set real values:
 - `JWT_EXPIRES_IN` (example: `1h`)
 - `CORS_ORIGINS` (comma-separated production origins)
 - `MEILI_MASTER_KEY`
+- `IMAGE_API`, `IMAGE_WEB`, `IMAGE_NGINX` (public image tags to pull)
 
 Never commit real secrets.
 
@@ -27,7 +28,7 @@ Never commit real secrets.
 
 ```bash
 cd infra
-docker compose up --build
+docker compose up -d
 ```
 
 ## VPS deploy (single command)
@@ -40,7 +41,7 @@ make deploy
 `make deploy` always uses:
 
 ```bash
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.vps.yml ...
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.vps.yml ... (image-based deploy)
 ```
 
 The deploy script hard-fails if the VPS override is missing or if the merged config does not include expected proxy aliases.
@@ -54,7 +55,7 @@ The deploy script hard-fails if the VPS override is missing or if the merged con
    - `cd /opt/interpreters && make deploy`
 3. Service health:
    - `docker compose -f infra/docker-compose.yml -f infra/docker-compose.vps.yml ps`
-   - `curl -fsS http://localhost:4000/health` (from API container or published gateway endpoint)
+   - `curl -fsS https://<your-domain>/health` (through the gateway proxy)
 4. Minimal journey:
    - signup user (response must not include verification token)
    - verify email + login

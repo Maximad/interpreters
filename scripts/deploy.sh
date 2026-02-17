@@ -34,15 +34,14 @@ if ! compose config > /tmp/interpreters.compose.rendered.yml; then
   exit 1
 fi
 
-if ! grep -q "interpreters-web" /tmp/interpreters.compose.rendered.yml || \
-   ! grep -q "interpreters-api" /tmp/interpreters.compose.rendered.yml; then
-  echo "VPS override did not apply expected proxy aliases; refusing deploy" >&2
+if ! grep -q "interpreters-nginx" /tmp/interpreters.compose.rendered.yml; then
+  echo "Compose config is missing the interpreters-nginx proxy alias; refusing deploy" >&2
   exit 1
 fi
 
-compose build
-compose run --rm api npm run prisma:migrate
-compose up -d --build --remove-orphans
+compose pull
+compose run --rm migrate
+compose up -d --remove-orphans
 
 docker image prune -f >/dev/null 2>&1 || true
 

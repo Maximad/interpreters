@@ -1,72 +1,12 @@
 services:
   nginx:
-    build:
-      context: ..
-      dockerfile: infra/nginx.prod.Dockerfile
+    image: ${IMAGE_NGINX:-ghcr.io/your-org/interpreters-nginx:latest}
     restart: unless-stopped
-    mem_limit: 256m
-    cpus: 0.50
-    volumes:
-      - certbot_www:/var/www/certbot
-      - letsencrypt:/etc/letsencrypt
 
   web:
+    image: ${IMAGE_WEB:-ghcr.io/your-org/interpreters-web:latest}
     restart: unless-stopped
-    mem_limit: 768m
-    cpus: 1.00
-    command: ["npm", "run", "start"]
-    environment:
-      - NODE_ENV=production
 
   api:
+    image: ${IMAGE_API:-ghcr.io/your-org/interpreters-api:latest}
     restart: unless-stopped
-    mem_limit: 768m
-    cpus: 1.00
-    environment:
-      - NODE_ENV=production
-      - PORT=4000
-      - DATABASE_URL=${DATABASE_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - REDIS_URL=redis://redis:6379
-      - MEILISEARCH_URL=http://meilisearch:7700
-      - SEARCH_SYNC_INTERVAL_MS=30000
-      - NOTIFICATION_QUEUE_INTERVAL_MS=10000
-      - NOTIFICATION_BATCH_SIZE=50
-      - DAILY_DIRECT_INQUIRY_LIMIT=30
-      - DAILY_BROADCAST_LIMIT=20
-      - BROADCAST_RECIPIENT_CAP=50
-
-  postgres:
-    restart: unless-stopped
-    mem_limit: 1g
-    cpus: 1.00
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB:-interpreter_marketplace}
-
-  redis:
-    restart: unless-stopped
-    mem_limit: 256m
-    cpus: 0.50
-
-  meilisearch:
-    restart: unless-stopped
-    mem_limit: 768m
-    cpus: 1.00
-    environment:
-      - MEILI_ENV=production
-      - MEILI_NO_ANALYTICS=true
-      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
-
-  certbot:
-    image: certbot/certbot:latest
-    profiles: ["certbot"]
-    volumes:
-      - certbot_www:/var/www/certbot
-      - letsencrypt:/etc/letsencrypt
-
-volumes:
-  certbot_www:
-  letsencrypt:
