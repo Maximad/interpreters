@@ -1,6 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../plugins/prisma';
+import {
+  booleanEquals,
+  numberGreaterThanOrEqual,
+  numberLessThanOrEqual,
+  stringEquals
+} from '../utils/meili-filter';
 
 const broadcastSchema = z.object({
   sourceLanguage: z.string().min(2),
@@ -30,19 +36,19 @@ function startOfToday() {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-function meiliFilter(input: z.infer<typeof broadcastSchema>) {
+export function meiliFilter(input: z.infer<typeof broadcastSchema>) {
   const clauses: string[] = [
-    `(languages = \"${input.sourceLanguage}\" OR languages = \"${input.targetLanguage}\")`,
-    `(domains = \"${input.domain}\")`,
-    `(cities = \"${input.city}\")`,
-    `(onsite_enabled = ${input.onsiteRequired})`,
-    `(remote_enabled = ${input.remoteAllowed})`
+    `(${stringEquals('languages', input.sourceLanguage)} OR ${stringEquals('languages', input.targetLanguage)})`,
+    `(${stringEquals('domains', input.domain)})`,
+    `(${stringEquals('cities', input.city)})`,
+    `(${booleanEquals('onsite_enabled', input.onsiteRequired)})`,
+    `(${booleanEquals('remote_enabled', input.remoteAllowed)})`
   ];
 
-  if (typeof input.budgetMinAed === 'number') clauses.push(`(hourly_rate_aed >= ${input.budgetMinAed})`);
-  if (typeof input.budgetMaxAed === 'number') clauses.push(`(hourly_rate_aed <= ${input.budgetMaxAed})`);
-  if (typeof input.minYears === 'number') clauses.push(`(years_experience >= ${input.minYears})`);
-  if (input.verifiedOnly) clauses.push('(is_email_verified = true)');
+  if (typeof input.budgetMinAed === 'number') clauses.push(`(${numberGreaterThanOrEqual('hourly_rate_aed', input.budgetMinAed)})`);
+  if (typeof input.budgetMaxAed === 'number') clauses.push(`(${numberLessThanOrEqual('hourly_rate_aed', input.budgetMaxAed)})`);
+  if (typeof input.minYears === 'number') clauses.push(`(${numberGreaterThanOrEqual('years_experience', input.minYears)})`);
+  if (input.verifiedOnly) clauses.push(`(${booleanEquals('is_email_verified', true)})`);
   return clauses.join(' AND ');
 }
 
