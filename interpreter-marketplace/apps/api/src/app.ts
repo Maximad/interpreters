@@ -22,6 +22,16 @@ export function buildApp() {
 
   const isProduction = process.env.NODE_ENV === 'production';
   const allowedOrigins = new Set(parseCorsOrigins(process.env.CORS_ORIGINS));
+  const jwtSecret = process.env.JWT_SECRET;
+  const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '1h';
+
+  if (!jwtSecret && isProduction) {
+    throw new Error('JWT_SECRET is required in production');
+  }
+
+  if (!jwtSecret && !isProduction) {
+    app.log.warn('JWT_SECRET is not set; using development fallback secret');
+  }
 
   app.register(cors, {
     origin: (origin, callback) => {
@@ -33,7 +43,10 @@ export function buildApp() {
       callback(new Error('Origin not allowed by CORS'), false);
     }
   });
-  app.register(jwt, { secret: process.env.JWT_SECRET || 'dev-secret' });
+  app.register(jwt, {
+    secret: jwtSecret || 'dev-secret',
+    sign: { expiresIn: jwtExpiresIn }
+  });
   app.register(authPlugin);
   app.register(meilisearchPlugin);
 

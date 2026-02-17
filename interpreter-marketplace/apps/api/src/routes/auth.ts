@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../plugins/prisma';
-import { hashPassword, makeToken, verifyPassword } from '../utils/security';
+import { hashPassword, hashToken, makeToken, verifyPassword } from '../utils/security';
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -19,8 +19,58 @@ const verifyEmailSchema = z.object({
   token: z.string().min(10)
 });
 
+type RateLimitResult = {
+  allowed: boolean;
+  retryAfterSeconds: number;
+};
+
+const authRateLimits = new Map<string, { attempts: number; resetAt: number }>();
+
+function checkRateLimit(key: string, maxAttempts: number, windowMs: number): RateLimitResult {
+  const now = Date.now();
+  const current = authRateLimits.get(key);
+
+  if (!current || current.resetAt <= now) {
+    authRateLimits.set(key, { attempts: 1, resetAt: now + windowMs });
+    return { allowed: true, retryAfterSeconds: 0 };
+  }
+
+  if (current.attempts >= maxAttempts) {
+    return {
+      allowed: false,
+      retryAfterSeconds: Math.max(1, Math.ceil((current.resetAt - now) / 1000))
+    };
+  }
+
+  current.attempts += 1;
+  authRateLimits.set(key, current);
+  return { allowed: true, retryAfterSeconds: 0 };
+}
+
+function enforceAuthRateLimit(
+  requestIp: string,
+  route: 'signup' | 'login' | 'verify-email'
+): RateLimitResult {
+  const limits = {
+    signup: { maxAttempts: 10, windowMs: 15 * 60 * 1000 },
+    login: { maxAttempts: 20, windowMs: 15 * 60 * 1000 },
+    'verify-email': { maxAttempts: 30, windowMs: 15 * 60 * 1000 }
+  } as const;
+
+  const selected = limits[route];
+  return checkRateLimit(`auth:${route}:${requestIp}`, selected.maxAttempts, selected.windowMs);
+}
+
 export const authRoutes: FastifyPluginAsync = async (app) => {
   app.post('/auth/signup', async (request, reply) => {
+    const rateResult = enforceAuthRateLimit(request.ip, 'signup');
+    if (!rateResult.allowed) {
+      return reply
+        .header('Retry-After', String(rateResult.retryAfterSeconds))
+        .status(429)
+        .send({ message: 'Too many signup attempts. Please try again later.' });
+    }
+
     const parsed = signupSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: parsed.error.flatten() });
@@ -43,7 +93,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     await prisma.emailVerificationToken.create({
       data: {
         user_id: user.id,
-        token,
+        token: hashToken(token),
         expires_at: new Date(Date.now() + 1000 * 60 * 60 * 24)
       }
     });
@@ -58,12 +108,21 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/auth/verify-email', async (request, reply) => {
+    const rateResult = enforceAuthRateLimit(request.ip, 'verify-email');
+    if (!rateResult.allowed) {
+      return reply
+        .header('Retry-After', String(rateResult.retryAfterSeconds))
+        .status(429)
+        .send({ message: 'Too many verification attempts. Please try again later.' });
+    }
+
     const parsed = verifyEmailSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: parsed.error.flatten() });
     }
 
-    const tokenRecord = await prisma.emailVerificationToken.findUnique({ where: { token: parsed.data.token } });
+    const tokenHash = hashToken(parsed.data.token);
+    const tokenRecord = await prisma.emailVerificationToken.findUnique({ where: { token: tokenHash } });
     if (!tokenRecord || tokenRecord.consumed_at || tokenRecord.expires_at < new Date()) {
       return reply.status(400).send({ message: 'Invalid or expired verification token' });
     }
@@ -83,6 +142,14 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/auth/login', async (request, reply) => {
+    const rateResult = enforceAuthRateLimit(request.ip, 'login');
+    if (!rateResult.allowed) {
+      return reply
+        .header('Retry-After', String(rateResult.retryAfterSeconds))
+        .status(429)
+        .send({ message: 'Too many login attempts. Please try again later.' });
+    }
+
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: parsed.error.flatten() });
