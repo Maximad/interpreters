@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { NotificationChannel, type Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../plugins/prisma';
 import {
@@ -69,7 +70,15 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
       sort: ['is_email_verified:desc', 'profile_completeness:desc', 'updated_at:desc']
     });
 
-    const profileIds = meiliResult.hits.map((hit: any) => hit.id as string).slice(0, recipientCapDefault);
+    const profileIds = meiliResult.hits
+      .flatMap((hit) => {
+        if (typeof (hit as { id?: unknown }).id === 'string') {
+          return [(hit as { id: string }).id];
+        }
+
+        return [];
+      })
+      .slice(0, recipientCapDefault);
 
     const created = await prisma.request.create({
       data: {
@@ -96,7 +105,7 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
       data: profiles.map((profile) => ({ request_id: created.id, interpreter_profile_id: profile.id, notified_at: new Date() }))
     });
 
-    const notificationRows = profiles.flatMap((profile) => {
+    const notificationRows: Prisma.NotificationCreateManyInput[] = profiles.flatMap((profile) => {
       const base = {
         user_id: profile.user_id,
         category: 'BROADCAST_REQUEST',
@@ -104,14 +113,14 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
       };
 
       if (profile.opt_out_broadcast_emails) {
-        return [{ ...base, channel: 'DASHBOARD' as const }];
+        return [{ ...base, channel: NotificationChannel.DASHBOARD }];
       }
 
       return [
-        { ...base, channel: 'DASHBOARD' as const },
+        { ...base, channel: NotificationChannel.DASHBOARD },
         {
           ...base,
-          channel: 'EMAIL' as const,
+          channel: NotificationChannel.EMAIL,
           payload: {
             requestId: created.id,
             subject: 'New broadcast interpreting request',
@@ -121,7 +130,7 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
       ];
     });
 
-    if (notificationRows.length) await prisma.notification.createMany({ data: notificationRows as any });
+    if (notificationRows.length) await prisma.notification.createMany({ data: notificationRows });
 
     return { request: created, matchedCount: profiles.length, recipientCap: recipientCapDefault };
   });
