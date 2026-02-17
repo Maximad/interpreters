@@ -25,8 +25,12 @@ export function buildApp() {
   const jwtSecret = process.env.JWT_SECRET;
   const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '1h';
 
-  if (isProduction && !jwtSecret) {
+  if (!jwtSecret && isProduction) {
     throw new Error('JWT_SECRET is required in production');
+  }
+
+  if (!jwtSecret && !isProduction) {
+    app.log.warn('JWT_SECRET is not set; using development fallback secret');
   }
 
   app.register(cors, {
