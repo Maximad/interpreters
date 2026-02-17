@@ -2,7 +2,9 @@
 set -euo pipefail
 
 PROJECT_DIR=${PROJECT_DIR:-/opt/interpreter-marketplace}
-COMPOSE_FILES="-f infra/docker-compose.yml -f infra/docker-compose.prod.yml -f infra/docker-compose.vps.yml"
+BRANCH=${BRANCH:-main}
+COMPOSE_BASE_FILE="infra/docker-compose.yml"
+COMPOSE_VPS_FILE="infra/docker-compose.vps.yml"
 
 cd "$PROJECT_DIR"
 
@@ -11,22 +13,37 @@ if [ ! -d .git ]; then
   exit 1
 fi
 
-BRANCH=${BRANCH:-main}
+for compose_file in "$COMPOSE_BASE_FILE" "$COMPOSE_VPS_FILE"; do
+  if [ ! -f "$compose_file" ]; then
+    echo "Required compose file is missing: $compose_file" >&2
+    exit 1
+  fi
+done
+
+compose() {
+  docker compose -f "$COMPOSE_BASE_FILE" -f "$COMPOSE_VPS_FILE" "$@"
+}
 
 git fetch origin "$BRANCH"
 git checkout "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
-# Build images first (idempotent)
-docker compose $COMPOSE_FILES build
+# Render merged compose and fail early if override aliases are absent.
+if ! compose config > /tmp/interpreter-marketplace.compose.rendered.yml; then
+  echo "docker compose config failed; refusing deploy" >&2
+  exit 1
+fi
 
-# Run migrations in one-off API container before service restart.
-docker compose $COMPOSE_FILES run --rm api npm run prisma:migrate
+if ! grep -q "interpreters-web" /tmp/interpreter-marketplace.compose.rendered.yml || \
+   ! grep -q "interpreters-api" /tmp/interpreter-marketplace.compose.rendered.yml; then
+  echo "VPS override did not apply expected proxy aliases; refusing deploy" >&2
+  exit 1
+fi
 
-# Start or update services after successful migration.
-docker compose $COMPOSE_FILES up -d --remove-orphans
+compose build
+compose run --rm api npm run prisma:migrate
+compose up -d --build --remove-orphans
 
-# Keep environment tidy.
 docker image prune -f >/dev/null 2>&1 || true
 
 echo "Deployment complete for branch: $BRANCH"
