@@ -2,14 +2,14 @@
 
 import { useState } from 'react';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function VerifyEmailPage() {
   const [message, setMessage] = useState('');
 
   async function handleSubmit(formData: FormData) {
     const token = String(formData.get('token') || '');
-    const response = await fetch(`${apiBase}/api/auth/verify-email`, {
+    const response = await fetch(`${apiBase}/auth/verify-email`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token })

@@ -1,4 +1,5 @@
 import { getRequestConfig } from 'next-intl/server';
+import { notFound } from 'next/navigation';
 import { routing } from './routing';
 
 function deepMerge<T extends Record<string, any>>(base: T, custom: T): T {
@@ -19,15 +20,16 @@ function deepMerge<T extends Record<string, any>>(base: T, custom: T): T {
 }
 
 export default getRequestConfig(async ({ locale }) => {
-  const resolvedLocale = routing.locales.includes(locale as any) ? locale : routing.defaultLocale;
+  if (!locale || !routing.locales.includes(locale as (typeof routing.locales)[number])) {
+    notFound();
+  }
 
   const enMessages = (await import('../messages/en.json')).default;
-  const localeMessages = resolvedLocale === 'en'
+  const localeMessages = locale === 'en'
     ? enMessages
-    : (await import(`../messages/${resolvedLocale}.json`)).default;
+    : (await import(`../messages/${locale}.json`)).default;
 
   return {
-    locale: resolvedLocale,
     messages: deepMerge(enMessages, localeMessages)
   };
 });

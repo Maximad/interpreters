@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 type SearchHit = {
   id: string;
@@ -54,7 +54,7 @@ export default function SearchPage() {
 
   async function runSearch() {
     setLoading(true);
-    const response = await fetch(`${apiBase}/api/search/interpreters?${queryString}`);
+    const response = await fetch(`${apiBase}/search/interpreters?${queryString}`);
     const data = await response.json();
     setLoading(false);
 

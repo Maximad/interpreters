@@ -12,6 +12,8 @@ services:
     ports: !reset []
 
   web:
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: /api
     networks:
       default: {}
       proxy:

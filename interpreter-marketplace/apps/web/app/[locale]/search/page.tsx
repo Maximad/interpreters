@@ -6,7 +6,7 @@ import { Link } from '../../../i18n/navigation';
 import { Button } from '../../../components/ui/button';
 import { Input } from '../../../components/ui/input';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 type SearchHit = {
   id: string;
@@ -37,7 +37,7 @@ export default function SearchPage() {
   }, [filters]);
 
   async function runSearch() {
-    const response = await fetch(`${apiBase}/api/search/interpreters?${queryString}`);
+    const response = await fetch(`${apiBase}/search/interpreters?${queryString}`);
     const data = await response.json();
     setResults(Array.isArray(data.hits) ? data.hits : []);
   }

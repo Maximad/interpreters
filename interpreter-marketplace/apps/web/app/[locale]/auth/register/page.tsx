@@ -7,7 +7,7 @@ import { Label } from '../../../../components/ui/label';
 import { Button } from '../../../../components/ui/button';
 import { useToast } from '../../../../components/providers/toast-provider';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function RegisterPage() {
   const t = useTranslations('auth');
@@ -22,7 +22,7 @@ export default function RegisterPage() {
       role: String(formData.get('role') || 'CLIENT')
     };
 
-    const response = await fetch(`${apiBase}/api/auth/signup`, {
+    const response = await fetch(`${apiBase}/auth/signup`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload)

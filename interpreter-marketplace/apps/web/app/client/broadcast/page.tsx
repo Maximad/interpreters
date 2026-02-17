@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function BroadcastRequestPage() {
   const [message, setMessage] = useState('');
@@ -24,7 +24,7 @@ export default function BroadcastRequestPage() {
       notes: String(formData.get('notes') || '')
     };
 
-    const response = await fetch(`${apiBase}/api/requests/broadcast`, {
+    const response = await fetch(`${apiBase}/requests/broadcast`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify(payload)

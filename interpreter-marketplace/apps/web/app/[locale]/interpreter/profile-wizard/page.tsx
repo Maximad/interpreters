@@ -7,7 +7,7 @@ import { Input } from '../../../../components/ui/input';
 import { Textarea } from '../../../../components/ui/textarea';
 import { useToast } from '../../../../components/providers/toast-provider';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 

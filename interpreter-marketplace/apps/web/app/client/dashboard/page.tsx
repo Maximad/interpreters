@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function ClientDashboardPage() {
   const [requests, setRequests] = useState<any[]>([]);
@@ -12,9 +12,9 @@ export default function ClientDashboardPage() {
   async function load() {
     const token = localStorage.getItem('im_token');
     const [r1, r2, r3] = await Promise.all([
-      fetch(`${apiBase}/api/dashboard/client/requests`, { headers: { authorization: `Bearer ${token}` } }),
-      fetch(`${apiBase}/api/dashboard/client/inquiries`, { headers: { authorization: `Bearer ${token}` } }),
-      fetch(`${apiBase}/api/dashboard/notifications`, { headers: { authorization: `Bearer ${token}` } })
+      fetch(`${apiBase}/dashboard/client/requests`, { headers: { authorization: `Bearer ${token}` } }),
+      fetch(`${apiBase}/dashboard/client/inquiries`, { headers: { authorization: `Bearer ${token}` } }),
+      fetch(`${apiBase}/dashboard/notifications`, { headers: { authorization: `Bearer ${token}` } })
     ]);
 
     setRequests(await r1.json());
@@ -24,7 +24,7 @@ export default function ClientDashboardPage() {
 
   async function acceptQuote(requestId: string, quoteId: string) {
     const token = localStorage.getItem('im_token');
-    await fetch(`${apiBase}/api/requests/${requestId}/quotes/${quoteId}/accept`, {
+    await fetch(`${apiBase}/requests/${requestId}/quotes/${quoteId}/accept`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}` }
     });

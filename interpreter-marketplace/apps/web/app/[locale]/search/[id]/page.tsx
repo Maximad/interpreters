@@ -7,7 +7,7 @@ import { Button } from '../../../../components/ui/button';
 import { Textarea } from '../../../../components/ui/textarea';
 import { useToast } from '../../../../components/providers/toast-provider';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function InterpreterProfileDetailPage({ params }: { params: { id: string } }) {
   const t = useTranslations('requestFlow');
@@ -17,12 +17,12 @@ export default function InterpreterProfileDetailPage({ params }: { params: { id:
   const [details, setDetails] = useState('');
 
   useEffect(() => {
-    fetch(`${apiBase}/api/search/interpreters/${params.id}`).then((r) => r.ok ? r.json() : null).then(setProfile);
+    fetch(`${apiBase}/search/interpreters/${params.id}`).then((r) => r.ok ? r.json() : null).then(setProfile);
   }, [params.id]);
 
   async function requestQuote() {
     const token = localStorage.getItem('im_token');
-    const response = await fetch(`${apiBase}/api/direct-inquiries`, {
+    const response = await fetch(`${apiBase}/direct-inquiries`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({ interpreterProfileId: params.id, message, details })

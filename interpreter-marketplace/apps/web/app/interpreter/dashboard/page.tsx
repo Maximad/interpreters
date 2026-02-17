@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function InterpreterDashboardPage() {
   const [requests, setRequests] = useState<any[]>([]);
@@ -13,9 +13,9 @@ export default function InterpreterDashboardPage() {
   async function load() {
     const token = localStorage.getItem('im_token');
     const [r1, r2, r3] = await Promise.all([
-      fetch(`${apiBase}/api/dashboard/interpreter/requests`, { headers: { authorization: `Bearer ${token}` } }),
-      fetch(`${apiBase}/api/dashboard/interpreter/inquiries`, { headers: { authorization: `Bearer ${token}` } }),
-      fetch(`${apiBase}/api/dashboard/notifications`, { headers: { authorization: `Bearer ${token}` } })
+      fetch(`${apiBase}/dashboard/interpreter/requests`, { headers: { authorization: `Bearer ${token}` } }),
+      fetch(`${apiBase}/dashboard/interpreter/inquiries`, { headers: { authorization: `Bearer ${token}` } }),
+      fetch(`${apiBase}/dashboard/notifications`, { headers: { authorization: `Bearer ${token}` } })
     ]);
 
     setRequests(await r1.json());
@@ -25,7 +25,7 @@ export default function InterpreterDashboardPage() {
 
   async function submitQuote(requestId: string, amountAed: number) {
     const token = localStorage.getItem('im_token');
-    await fetch(`${apiBase}/api/requests/${requestId}/quotes`, {
+    await fetch(`${apiBase}/requests/${requestId}/quotes`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({ amountAed, message: 'Available and ready to support.' })
@@ -35,7 +35,7 @@ export default function InterpreterDashboardPage() {
 
   async function saveBroadcastPrefs() {
     const token = localStorage.getItem('im_token');
-    await fetch(`${apiBase}/api/profile/broadcast-preferences`, {
+    await fetch(`${apiBase}/profile/broadcast-preferences`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({ optOutBroadcastEmails: optOut })

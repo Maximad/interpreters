@@ -208,6 +208,8 @@ model Quote {
   request                Request            @relation(fields: [request_id], references: [id])
   interpreter_profile    InterpreterProfile @relation(fields: [interpreter_profile_id], references: [id])
   client                 User               @relation(fields: [client_user_id], references: [id])
+
+  @@unique([request_id, interpreter_profile_id])
 }
 
 model DirectInquiry {

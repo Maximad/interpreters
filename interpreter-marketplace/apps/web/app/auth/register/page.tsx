@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function RegisterPage() {
   const [message, setMessage] = useState('');
@@ -15,7 +15,7 @@ export default function RegisterPage() {
       role: String(formData.get('role') || 'CLIENT')
     };
 
-    const response = await fetch(`${apiBase}/api/auth/signup`, {
+    const response = await fetch(`${apiBase}/auth/signup`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload)

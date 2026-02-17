@@ -1,5 +1,5 @@
 import { NextIntlClientProvider } from 'next-intl';
-import { getLocale, getMessages, getTranslations } from 'next-intl/server';
+import { getMessages, getTranslations, unstable_setRequestLocale } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { LanguageSwitcher } from '../../components/language-switcher';
 import { Link } from '../../i18n/navigation';
@@ -10,14 +10,14 @@ function isRtl(locale: string) {
   return ['ar', 'fa'].includes(locale);
 }
 
-export default async function LocaleLayout({ children }: { children: ReactNode }) {
-  const locale = await getLocale();
+export default async function LocaleLayout({ children, params: { locale } }: { children: ReactNode; params: { locale: string } }) {
+  unstable_setRequestLocale(locale);
   const messages = await getMessages();
   const t = await getTranslations('nav');
   const rtl = isRtl(locale);
 
   return (
-    <NextIntlClientProvider messages={messages}>
+    <NextIntlClientProvider locale={locale} messages={messages}>
       <ToastProvider>
         <LocaleDocumentSync locale={locale} rtl={rtl} />
         <div className={`min-h-screen bg-slate-50 text-slate-900 ${rtl ? 'font-[Tahoma,Arial,sans-serif]' : 'font-[Inter,system-ui,sans-serif]'}`}>
