@@ -31,6 +31,11 @@ jobs:
       - name: Prisma validate
         run: npm run prisma:generate -w @im/api
 
+      - name: Lint (non-interactive)
+        env:
+          CI: true
+        run: npm run lint
+
       - name: Type/build check
         run: npm run build
 
