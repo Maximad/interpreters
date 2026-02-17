@@ -15,7 +15,7 @@ logs:
 	$(COMPOSE) logs -f --tail=200
 
 restart:
-	$(COMPOSE) up -d --build --remove-orphans
+	$(COMPOSE) up -d --remove-orphans
 
 prune-cache:
 	docker builder prune -f

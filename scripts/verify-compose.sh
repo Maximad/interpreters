@@ -16,7 +16,6 @@ trap 'rm -f "$rendered_file"' EXIT
 
 docker compose -f "$COMPOSE_BASE_FILE" -f "$COMPOSE_VPS_FILE" config > "$rendered_file"
 
-grep -q "interpreters-web" "$rendered_file"
-grep -q "interpreters-api" "$rendered_file"
+grep -q "interpreters-nginx" "$rendered_file"
 
-echo "Compose configuration is valid and VPS network aliases are present."
+echo "Compose configuration is valid and gateway proxy alias is present."

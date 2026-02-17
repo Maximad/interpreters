@@ -1,62 +1,158 @@
 services:
   nginx:
-    build:
-      context: ..
-      dockerfile: infra/nginx.Dockerfile
-    ports:
-      - "80:80"
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-your-org/interpreters}/nginx:${IMAGE_TAG:-latest}
+    restart: unless-stopped
     depends_on:
-      - web
-      - api
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    expose:
+      - "8080"
+    networks:
+      default: {}
+      proxy:
+        aliases:
+          - interpreters-nginx
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    logging: &default-logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   web:
-    build:
-      context: ..
-      dockerfile: apps/web/Dockerfile
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-your-org/interpreters}/web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
     environment:
-      - NODE_ENV=development
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-/api}
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
+
+  migrate:
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-your-org/interpreters}/api:${IMAGE_TAG:-latest}
+    restart: "no"
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_URL: redis://redis:6379
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+    command: ["npm", "run", "prisma:migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
 
   api:
-    build:
-      context: ..
-      dockerfile: apps/api/Dockerfile
+    image: ${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_NAMESPACE:-your-org/interpreters}/api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
     environment:
-      - NODE_ENV=development
-      - PORT=4000
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/interpreter_marketplace?schema=public
-      - JWT_SECRET=local-dev-jwt-secret
-      - REDIS_URL=redis://redis:6379
-      - MEILISEARCH_URL=http://meilisearch:7700
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      REDIS_URL: redis://redis:6379
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_API_KEY: ${MEILI_MASTER_KEY}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      SEARCH_SYNC_INTERVAL_MS: ${SEARCH_SYNC_INTERVAL_MS:-30000}
+      NOTIFICATION_QUEUE_INTERVAL_MS: ${NOTIFICATION_QUEUE_INTERVAL_MS:-10000}
+      NOTIFICATION_BATCH_SIZE: ${NOTIFICATION_BATCH_SIZE:-50}
+      DAILY_DIRECT_INQUIRY_LIMIT: ${DAILY_DIRECT_INQUIRY_LIMIT:-30}
+      DAILY_BROADCAST_LIMIT: ${DAILY_BROADCAST_LIMIT:-20}
+      BROADCAST_RECIPIENT_CAP: ${BROADCAST_RECIPIENT_CAP:-50}
     depends_on:
-      - postgres
-      - redis
-      - meilisearch
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:4000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1));"
+        ]
+      interval: 20s
+      timeout: 5s
+      retries: 6
+      start_period: 25s
+    logging: *default-logging
 
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=interpreter_marketplace
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-interpreter_marketplace}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-interpreter_marketplace}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    logging: *default-logging
 
   meilisearch:
     image: getmeili/meilisearch:v1.8
+    restart: unless-stopped
     environment:
-      - MEILI_ENV=development
-      - MEILI_NO_ANALYTICS=true
-    ports:
-      - "7700:7700"
+      MEILI_ENV: production
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+    volumes:
+      - meili_data:/meili_data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7700/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    logging: *default-logging
 
 volumes:
   postgres_data:
+  meili_data:
+  redis_data:
+
+networks:
+  proxy:
+    external: true

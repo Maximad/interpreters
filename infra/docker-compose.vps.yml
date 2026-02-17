@@ -1,71 +1,24 @@
 services:
   nginx:
-    profiles: ["disabled"]
-
-  postgres:
-    restart: unless-stopped
-    mem_limit: 1g
-    cpus: 1.00
-    ports: !reset []
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB:-interpreter_marketplace}
-
-  redis:
-    restart: unless-stopped
     mem_limit: 256m
     cpus: 0.50
-    ports: !reset []
-
-  meilisearch:
-    restart: unless-stopped
-    mem_limit: 768m
-    cpus: 1.00
-    ports: !reset []
-    environment:
-      - MEILI_ENV=production
-      - MEILI_NO_ANALYTICS=true
-      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
 
   web:
-    restart: unless-stopped
     mem_limit: 768m
     cpus: 1.00
-    environment:
-      - NODE_ENV=production
-      - NEXT_PUBLIC_API_BASE_URL=/api
-    networks:
-      default: {}
-      proxy:
-        aliases: [interpreters-web]
 
   api:
-    restart: unless-stopped
     mem_limit: 768m
     cpus: 1.00
-    environment:
-      - NODE_ENV=production
-      - PORT=4000
-      - DATABASE_URL=${DATABASE_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-1h}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - REDIS_URL=redis://redis:6379
-      - MEILISEARCH_URL=http://meilisearch:7700
-      - MEILISEARCH_API_KEY=${MEILI_MASTER_KEY}
-      - MEILI_MASTER_KEY=${MEILI_MASTER_KEY}
-      - SEARCH_SYNC_INTERVAL_MS=30000
-      - NOTIFICATION_QUEUE_INTERVAL_MS=10000
-      - NOTIFICATION_BATCH_SIZE=50
-      - DAILY_DIRECT_INQUIRY_LIMIT=30
-      - DAILY_BROADCAST_LIMIT=20
-      - BROADCAST_RECIPIENT_CAP=50
-    networks:
-      default: {}
-      proxy:
-        aliases: [interpreters-api]
 
-networks:
-  proxy:
-    external: true
+  postgres:
+    mem_limit: 1g
+    cpus: 1.00
+
+  redis:
+    mem_limit: 256m
+    cpus: 0.50
+
+  meilisearch:
+    mem_limit: 768m
+    cpus: 1.00

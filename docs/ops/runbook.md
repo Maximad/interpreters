@@ -2,12 +2,12 @@
 
 ## Deployment model
 
-This project deploys with a **required compose pair**:
+This project deploys with an **image-only compose pair**:
 
-- `infra/docker-compose.yml` (base)
-- `infra/docker-compose.vps.yml` (VPS overrides)
+- `infra/docker-compose.yml` (base, image references, healthchecks, proxy network)
+- `infra/docker-compose.vps.yml` (optional VPS resource overrides)
 
-The deploy script validates both files, renders merged config, and checks proxy aliases before deploy.
+The deploy script validates both files, renders merged config, pulls images, runs migrations, and starts services.
 
 ## Fresh VPS deploy (single command)
 
@@ -26,7 +26,7 @@ cp .env.example .env
 make deploy
 ```
 
-This executes pull/reset, compose config sanity check, build, Prisma migrations, and `up -d --build --remove-orphans`.
+This executes pull/reset, compose config sanity check, image pull, migration run (`migrate` service), and `up -d --remove-orphans`.
 
 ## Health checks
 
@@ -35,14 +35,18 @@ docker compose -f infra/docker-compose.yml -f infra/docker-compose.vps.yml ps
 docker compose -f infra/docker-compose.yml -f infra/docker-compose.vps.yml exec api wget -qO- http://localhost:4000/health
 ```
 
-If you use an external Caddy gateway, verify proxy upstreams from the gateway container/network can resolve `interpreters-web` and `interpreters-api`.
+Gateway-level check:
+
+```bash
+curl -fsS https://<your-domain>/health
+```
 
 ## Logs
 
 ```bash
 make logs
 # or targeted:
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.vps.yml logs -f api web postgres meilisearch
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.vps.yml logs -f nginx api web postgres redis meilisearch
 ```
 
 ## Restart / rollback
@@ -70,50 +74,19 @@ PROJECT_DIR=/opt/interpreters ./scripts/backup.sh
 
 Restore uses standard PostgreSQL dump restore into the `postgres` service.
 
-## Disk usage reality
+## Gateway / TLS notes
 
-Deleting `/opt/interpreters` **does not remove** system packages like Docker Engine, Node, npm, or system logs.
+TLS termination is handled by the **existing VPS gateway proxy**.
 
-The main long-term disk consumers are usually:
-- Docker images/layers
-- BuildKit cache
-- Container logs
-- Named volumes (especially Postgres data)
+- Domain: `APP_DOMAIN` / your configured host
+- Upstream service: `interpreters-nginx`
+- Upstream port: `8080`
+- TLS: terminated at gateway, backend traffic on Docker network
 
-Check usage:
+Use `infra/Caddyfile.interpreters` as a reference route:
 
-```bash
-df -h
-docker system df -v
-```
-
-## Safe cleanup (does NOT remove volumes/database)
-
-```bash
-make prune-cache
-# equivalent:
-docker builder prune -f
-# optional wider cache cleanup:
-docker buildx prune -f
-```
-
-## Aggressive cleanup (can delete volumes / DB data)
-
-⚠️ **Destructive**: only run if you accept data loss for unnamed + optionally named volumes.
-
-```bash
-docker system prune -a --volumes
-```
-
-## Gateway / Caddy notes
-
-If the VPS uses a host-level Caddy gateway, use `infra/Caddyfile.interpreters` and route:
-- `/api/*` -> `interpreters-api:4000`
-- `/health` -> `interpreters-api:4000/health`
-- `/` -> `interpreters-web:3000`
-
-After reload, verify with a gateway-side health request:
-
-```bash
-curl -fsS https://<your-domain>/health
+```caddy
+interpreters.jwtalenthouse.com {
+  reverse_proxy interpreters-nginx:8080
+}
 ```
