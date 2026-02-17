@@ -1,5 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import {
+  booleanEquals,
+  numberGreaterThanOrEqual,
+  numberLessThanOrEqual,
+  stringEquals
+} from '../utils/meili-filter';
 
 const querySchema = z.object({
   q: z.string().optional(),
@@ -24,7 +30,7 @@ function parseList(value?: string) {
     .filter(Boolean);
 }
 
-function buildFilters(parsed: z.infer<typeof querySchema>) {
+export function buildFilters(parsed: z.infer<typeof querySchema>) {
   const filters: string[] = [];
 
   const languages = parseList(parsed.languages);
@@ -32,20 +38,20 @@ function buildFilters(parsed: z.infer<typeof querySchema>) {
   const cities = parseList(parsed.cities);
 
   if (languages.length) {
-    filters.push(`(${languages.map((item) => `languages = \"${item}\"`).join(' OR ')})`);
+    filters.push(`(${languages.map((item) => stringEquals('languages', item)).join(' OR ')})`);
   }
   if (domains.length) {
-    filters.push(`(${domains.map((item) => `domains = \"${item}\"`).join(' OR ')})`);
+    filters.push(`(${domains.map((item) => stringEquals('domains', item)).join(' OR ')})`);
   }
   if (cities.length) {
-    filters.push(`(${cities.map((item) => `cities = \"${item}\"`).join(' OR ')})`);
+    filters.push(`(${cities.map((item) => stringEquals('cities', item)).join(' OR ')})`);
   }
-  if (parsed.onsite) filters.push(`onsite_enabled = ${parsed.onsite === 'true'}`);
-  if (parsed.remote) filters.push(`remote_enabled = ${parsed.remote === 'true'}`);
-  if (typeof parsed.min_rate === 'number') filters.push(`hourly_rate_aed >= ${parsed.min_rate}`);
-  if (typeof parsed.max_rate === 'number') filters.push(`hourly_rate_aed <= ${parsed.max_rate}`);
-  if (typeof parsed.min_years === 'number') filters.push(`years_experience >= ${parsed.min_years}`);
-  if (parsed.verified_only === 'true') filters.push('is_email_verified = true');
+  if (parsed.onsite) filters.push(booleanEquals('onsite_enabled', parsed.onsite === 'true'));
+  if (parsed.remote) filters.push(booleanEquals('remote_enabled', parsed.remote === 'true'));
+  if (typeof parsed.min_rate === 'number') filters.push(numberGreaterThanOrEqual('hourly_rate_aed', parsed.min_rate));
+  if (typeof parsed.max_rate === 'number') filters.push(numberLessThanOrEqual('hourly_rate_aed', parsed.max_rate));
+  if (typeof parsed.min_years === 'number') filters.push(numberGreaterThanOrEqual('years_experience', parsed.min_years));
+  if (parsed.verified_only === 'true') filters.push(booleanEquals('is_email_verified', true));
 
   return filters.length ? filters.join(' AND ') : undefined;
 }
