@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Button } from '../../../../components/ui/button';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function InterpreterDashboardPage() {
   const t = useTranslations('requestFlow');
@@ -12,7 +12,7 @@ export default function InterpreterDashboardPage() {
 
   async function load() {
     const token = localStorage.getItem('im_token');
-    const response = await fetch(`${apiBase}/api/dashboard/interpreter/requests`, { headers: { authorization: `Bearer ${token}` } });
+    const response = await fetch(`${apiBase}/dashboard/interpreter/requests`, { headers: { authorization: `Bearer ${token}` } });
     setRequests(await response.json());
   }
 

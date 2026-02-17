@@ -6,7 +6,7 @@ import { Label } from '../../../../components/ui/label';
 import { Button } from '../../../../components/ui/button';
 import { useToast } from '../../../../components/providers/toast-provider';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function VerifyEmailPage() {
   const t = useTranslations('auth');
@@ -14,7 +14,7 @@ export default function VerifyEmailPage() {
 
   async function handleSubmit(formData: FormData) {
     const token = String(formData.get('token') || '');
-    const response = await fetch(`${apiBase}/api/auth/verify-email`, {
+    const response = await fetch(`${apiBase}/auth/verify-email`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token })

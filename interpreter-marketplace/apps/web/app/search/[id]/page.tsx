@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function InterpreterProfileDetailPage({ params }: { params: { id: string } }) {
   const [profile, setProfile] = useState<any>(null);
@@ -12,14 +12,14 @@ export default function InterpreterProfileDetailPage({ params }: { params: { id:
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
-    fetch(`${apiBase}/api/search/interpreters/${params.id}`, { cache: 'no-store' })
+    fetch(`${apiBase}/search/interpreters/${params.id}`, { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setProfile(data));
   }, [params.id]);
 
   async function requestQuote() {
     const token = localStorage.getItem('im_token');
-    const response = await fetch(`${apiBase}/api/direct-inquiries`, {
+    const response = await fetch(`${apiBase}/direct-inquiries`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({ interpreterProfileId: params.id, message, details })

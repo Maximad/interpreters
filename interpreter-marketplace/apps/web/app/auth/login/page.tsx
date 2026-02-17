@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function LoginPage() {
   const [message, setMessage] = useState('');
@@ -13,7 +13,7 @@ export default function LoginPage() {
       password: String(formData.get('password') || '')
     };
 
-    const response = await fetch(`${apiBase}/api/auth/login`, {
+    const response = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload)

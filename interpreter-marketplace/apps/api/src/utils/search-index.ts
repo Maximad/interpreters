@@ -66,7 +66,18 @@ export async function syncApprovedInterpreterProfiles(prisma: PrismaClient, meil
   });
 
   const docs = profiles.map(toDoc);
-  await meiliClient.index(indexName).addDocuments(docs, { primaryKey: 'id' });
+  const index = meiliClient.index(indexName);
+
+  console.info(`[search-sync] Starting full sync for ${indexName} with ${docs.length} approved profiles`);
+  const deleteTask = await index.deleteAllDocuments();
+  await meiliClient.waitForTask(deleteTask.taskUid);
+  console.info(`[search-sync] deleteAllDocuments completed for ${indexName}`);
+
+  const addTask = await index.addDocuments(docs, { primaryKey: 'id' });
+  console.info(`[search-sync] addDocuments enqueued for ${indexName} with task ${addTask.taskUid}`);
+  await meiliClient.waitForTask(addTask.taskUid);
+  console.info(`[search-sync] addDocuments completed for ${indexName}`);
+  console.info(`[search-sync] Full sync completed for ${indexName}`);
 }
 
 export async function upsertInterpreterProfileToIndex(

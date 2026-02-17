@@ -7,5 +7,6 @@ RUN npm install
 COPY . .
 WORKDIR /app/apps/api
 RUN npm run prisma:generate
+RUN npm run build
 EXPOSE 4000
-CMD ["sh", "-c", "npm run prisma:push && npm run seed && npm run dev"]
+CMD ["sh", "-c", "npm run prisma:migrate && npm run start"]

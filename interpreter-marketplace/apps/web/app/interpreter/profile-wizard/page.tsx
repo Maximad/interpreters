@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 type Step = 1 | 2 | 3 | 4 | 5;
 
@@ -31,7 +31,7 @@ export default function ProfileWizardPage() {
 
   async function submitForReview() {
     const token = localStorage.getItem('im_token');
-    const response = await fetch(`${apiBase}/api/profile/submit`, {
+    const response = await fetch(`${apiBase}/profile/submit`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}` }
     });

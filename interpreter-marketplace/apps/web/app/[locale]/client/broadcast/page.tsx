@@ -6,7 +6,7 @@ import { Input } from '../../../../components/ui/input';
 import { Textarea } from '../../../../components/ui/textarea';
 import { useToast } from '../../../../components/providers/toast-provider';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function BroadcastRequestPage() {
   const t = useTranslations('requestFlow');
@@ -25,7 +25,7 @@ export default function BroadcastRequestPage() {
       notes: String(formData.get('notes') || '')
     };
 
-    const response = await fetch(`${apiBase}/api/requests/broadcast`, {
+    const response = await fetch(`${apiBase}/requests/broadcast`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify(payload)

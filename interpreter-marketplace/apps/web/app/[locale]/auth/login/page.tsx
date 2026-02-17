@@ -7,7 +7,7 @@ import { Label } from '../../../../components/ui/label';
 import { Button } from '../../../../components/ui/button';
 import { useToast } from '../../../../components/providers/toast-provider';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export default function LoginPage() {
   const t = useTranslations('auth');
@@ -21,7 +21,7 @@ export default function LoginPage() {
     };
 
     setError('');
-    const response = await fetch(`${apiBase}/api/auth/login`, {
+    const response = await fetch(`${apiBase}/auth/login`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload)
