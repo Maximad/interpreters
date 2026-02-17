@@ -1,19 +1,20 @@
 import { NextIntlClientProvider } from 'next-intl';
-import { getMessages, getTranslations, unstable_setRequestLocale } from 'next-intl/server';
+import { getMessages, getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
 import { LanguageSwitcher } from '../../components/language-switcher';
 import { Link } from '../../i18n/navigation';
 import { ToastProvider } from '../../components/providers/toast-provider';
 import { LocaleDocumentSync } from '../../components/providers/locale-document-sync';
 
+export const dynamic = 'force-dynamic';
+
 function isRtl(locale: string) {
   return ['ar', 'fa'].includes(locale);
 }
 
 export default async function LocaleLayout({ children, params: { locale } }: { children: ReactNode; params: { locale: string } }) {
-  unstable_setRequestLocale(locale);
-  const messages = await getMessages();
-  const t = await getTranslations('nav');
+  const messages = await getMessages({ locale });
+  const t = await getTranslations({ locale, namespace: 'nav' });
   const rtl = isRtl(locale);
 
   return (

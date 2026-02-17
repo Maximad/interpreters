@@ -32,9 +32,10 @@ jobs:
         run: npm run prisma:generate -w @im/api
 
       - name: Lint (non-interactive)
-        env:
-          CI: true
-        run: npm run lint
+        run: npm run lint:ci
+
+      - name: Web Docker-compatible build check
+        run: npm run build:web:docker
 
       - name: Type/build check
         run: npm run build
