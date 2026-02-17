@@ -1,0 +1,31 @@
+services:
+  nginx:
+    profiles: ["disabled"]
+
+  postgres:
+    ports: !reset []
+
+  redis:
+    ports: !reset []
+
+  meilisearch:
+    ports: !reset []
+
+  web:
+    networks:
+      default: {}
+      proxy:
+        aliases: [interpreters-web]
+
+  api:
+    environment:
+      MEILISEARCH_API_KEY: ${MEILI_MASTER_KEY}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+    networks:
+      default: {}
+      proxy:
+        aliases: [interpreters-api]
+
+networks:
+  proxy:
+    external: true

@@ -66,7 +66,7 @@ export async function syncApprovedInterpreterProfiles(prisma: PrismaClient, meil
   });
 
   const docs = profiles.map(toDoc);
-  await meiliClient.index(indexName).replaceDocuments(docs, { primaryKey: 'id' });
+  await meiliClient.index(indexName).addDocuments(docs, { primaryKey: 'id' });
 }
 
 export async function upsertInterpreterProfileToIndex(
