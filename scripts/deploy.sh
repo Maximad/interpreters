@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR=${PROJECT_DIR:-/opt/interpreter-marketplace}
+PROJECT_DIR=${PROJECT_DIR:-/opt/interpreters}
 BRANCH=${BRANCH:-main}
 COMPOSE_BASE_FILE="infra/docker-compose.yml"
 COMPOSE_VPS_FILE="infra/docker-compose.vps.yml"
@@ -29,13 +29,13 @@ git checkout "$BRANCH"
 git reset --hard "origin/$BRANCH"
 
 # Render merged compose and fail early if override aliases are absent.
-if ! compose config > /tmp/interpreter-marketplace.compose.rendered.yml; then
+if ! compose config > /tmp/interpreters.compose.rendered.yml; then
   echo "docker compose config failed; refusing deploy" >&2
   exit 1
 fi
 
-if ! grep -q "interpreters-web" /tmp/interpreter-marketplace.compose.rendered.yml || \
-   ! grep -q "interpreters-api" /tmp/interpreter-marketplace.compose.rendered.yml; then
+if ! grep -q "interpreters-web" /tmp/interpreters.compose.rendered.yml || \
+   ! grep -q "interpreters-api" /tmp/interpreters.compose.rendered.yml; then
   echo "VPS override did not apply expected proxy aliases; refusing deploy" >&2
   exit 1
 fi

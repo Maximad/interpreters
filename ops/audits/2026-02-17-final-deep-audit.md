@@ -1,7 +1,7 @@
 # Final Deep Audit — 2026-02-17
 
 ## Scope
-- Repository: `interpreter-marketplace`
+- Repository: `interpreters`
 - Audited areas: API auth/security, request/quote workflows, search filter safety, CORS/JWT configuration, Prisma schema constraints, and web-client integration surface.
 
 ## Methodology
