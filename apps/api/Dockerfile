@@ -2,7 +2,7 @@ FROM node:20-alpine AS builder
 RUN apk add --no-cache openssl libc6-compat
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package.json ./
 COPY apps/api/package.json ./apps/api/package.json
 
 RUN npm ci
