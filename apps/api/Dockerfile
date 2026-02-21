@@ -19,7 +19,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-COPY package.json package-lock.json ./
+COPY package.json ./
 COPY apps/api/package.json ./apps/api/package.json
 RUN npm ci --omit=dev --workspace @im/api
 
