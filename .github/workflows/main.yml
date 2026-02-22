@@ -1,0 +1,78 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}   # set this to deploya in Secrets
+          port: ${{ secrets.VPS_PORT }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+
+            APP_DIR="${{ secrets.VPS_APP_DIR }}"
+            REPO_URL="${{ secrets.REPO_URL }}"
+
+            echo "==> Prepare directory"
+            mkdir -p "$APP_DIR"
+            cd "$APP_DIR"
+
+            echo "==> Ensure git exists"
+            if ! command -v git >/dev/null 2>&1; then
+              sudo apt-get update -y
+              sudo apt-get install -y git
+            fi
+
+            echo "==> Trust github.com host key (prevents first-time SSH prompt)"
+            mkdir -p ~/.ssh
+            chmod 700 ~/.ssh
+            ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null
+            chmod 644 ~/.ssh/known_hosts
+
+            echo "==> Clone if missing"
+            if [ ! -d ".git" ]; then
+              git clone "$REPO_URL" .
+            fi
+
+            echo "==> Update code"
+            git fetch --all --prune
+            git checkout main
+            git reset --hard origin/main
+
+            echo "==> (Optional) Login to GHCR for private images"
+            if [ -n "${{ secrets.GHCR_PAT }}" ]; then
+              echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+            else
+              echo "GHCR_PAT not set, skipping GHCR login"
+            fi
+
+            echo "==> Deploy with Docker Compose if present"
+            if [ -f "docker-compose.yml" ] || [ -f "compose.yml" ]; then
+              if docker compose version >/dev/null 2>&1; then
+                docker compose pull
+                docker compose up -d --remove-orphans
+              else
+                docker-compose pull
+                docker-compose up -d --remove-orphans
+              fi
+              echo "==> Done"
+              exit 0
+            fi
+
+            echo "No docker-compose.yml/compose.yml found in $APP_DIR"
+            echo "Add one, or change this workflow to run your node/pm2 commands."
+            exit 1
