@@ -5,7 +5,7 @@ const indexName = process.env.MEILISEARCH_INTERPRETERS_INDEX || 'interpreters';
 
 export default fp(async function meilisearchPlugin(fastify) {
   const host = process.env.MEILISEARCH_URL || 'http://localhost:7700';
-  const apiKey = process.env.MEILISEARCH_API_KEY;
+  const apiKey = process.env.MEILISEARCH_API_KEY || process.env.MEILI_MASTER_KEY;
   const client = new MeiliSearch({ host, apiKey });
 
   fastify.decorate('meiliClient', client);

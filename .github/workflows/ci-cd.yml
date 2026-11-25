@@ -36,6 +36,12 @@ jobs:
       - run: npm run compose:verify
       - run: make local
       - run: node scripts/smoke-test.mjs
+      - name: Collect failed smoke-test logs
+        if: failure()
+        run: >-
+          docker compose -p interpreters-local --env-file .env.example
+          -f infra/docker-compose.yml -f infra/docker-compose.local.yml
+          logs --no-color --tail=45 migrate api web nginx
 
   publish:
     if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
@@ -125,7 +131,13 @@ jobs:
             else
               echo 'Interpreter checkout could not be located in the configured deployment directory.'
             fi
-            docker ps -a --filter name=interpreters --format '{{.Names}} {{.Image}} {{.Status}}'
+            read_containers() {
+              "$@" ps -a --filter name=interpreters --format '{{.Names}} {{.Image}} {{.Status}}'
+            }
+            if ! read_containers docker && ! read_containers sudo -n docker; then
+              echo 'The deployment account needs access to Docker to report container status.' >&2
+              exit 1
+            fi
 
   deploy:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy-vps' && github.ref == 'refs/heads/main'
