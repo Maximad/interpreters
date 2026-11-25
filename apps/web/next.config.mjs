@@ -7,7 +7,14 @@ const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 const nextConfig = {
   output: 'standalone',
   outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
-  typedRoutes: true
+  typedRoutes: true,
+  async redirects() {
+    return ['auth', 'client', 'interpreter', 'admin'].map((section) => ({
+      source: `/${section}/:path*`,
+      destination: `/en/${section}/:path*`,
+      permanent: false
+    }));
+  }
 };
 
 export default withNextIntl(nextConfig);

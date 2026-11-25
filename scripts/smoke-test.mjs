@@ -73,7 +73,7 @@ async function signup(name, role, resend = false) {
   const message = await waitForMail(email, 'Verify your Interpreter Marketplace email', resend ? 2 : 1);
   const link = new URL(message.Text.match(/https?:\/\/\S+/u)[0]);
   assert.equal(link.origin, web);
-  assert.equal(link.pathname, '/auth/verify-email');
+  assert.equal(link.pathname, '/en/auth/verify-email');
   const token = new URLSearchParams(link.hash.slice(1)).get('token');
   assert.ok(token);
   await api('/auth/verify-email', { method: 'POST', payload: { token } });
@@ -83,6 +83,9 @@ async function signup(name, role, resend = false) {
 
 const health = await fetch(`${web}/health`);
 assert.equal(health.status, 200, 'Gateway health');
+const verificationPage = await fetch(`${web}/auth/verify-email`);
+assert.equal(verificationPage.status, 200);
+assert.equal(new URL(verificationPage.url).pathname, '/en/auth/verify-email');
 for (const [path, heading] of [
   ['/en', 'Interpreter Marketplace'],
   ['/ar/auth/verify-email', 'إعادة إرسال رسالة التحقق'],

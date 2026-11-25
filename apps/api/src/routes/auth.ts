@@ -84,7 +84,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return;
     }
 
-    const link = new URL('/auth/verify-email', origin);
+    const link = new URL('/en/auth/verify-email', origin);
     link.hash = new URLSearchParams({ token }).toString();
     await sendEmail(email, 'Verify your Interpreter Marketplace email', `Open this link to verify your email address:\n\n${link}\n\nThe link expires in 24 hours.`);
   }
