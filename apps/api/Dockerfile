@@ -1,5 +1,6 @@
 FROM node:22-bookworm AS base
 WORKDIR /app
+RUN install -d -m 0755 apps apps/api apps/web
 COPY --chmod=0644 package.json package-lock.json ./
 COPY --chmod=0644 apps/api/package.json ./apps/api/package.json
 COPY --chmod=0644 apps/web/package.json ./apps/web/package.json
