@@ -2,7 +2,7 @@
 
 ## Prepare a VPS deployment
 
-The default checkout is `/opt/interpreters`. Use the Compose files `infra/docker-compose.yml` and `infra/docker-compose.vps.yml` with the same Compose project name and volumes as the existing stack.
+The default checkout is `/opt/interpreters`. The Compose files `infra/docker-compose.yml` and `infra/docker-compose.vps.yml` use the project name `interpreters`, matching Docker Manager. Verify the existing database volume before the first upgrade. If an earlier deployment used a different Compose project name, set `COMPOSE_PROJECT_NAME` in the environment file to reuse that project's volumes.
 
 Create an environment file outside the checkout, for example `/etc/interpreters/interpreters.env`, using `.env.example` as a reference. On an existing deployment, copy its current production settings to this file before switching revisions. Protect it with mode `600` and give the deploy account read access. Preserve its database and Meilisearch credentials unless you rotate them separately.
 
@@ -32,7 +32,7 @@ For an existing schema verified against the baseline, use the same Compose comma
 
 ## Gateway and temporary hostname
 
-The shared Caddy proxy terminates TLS and reaches `interpreters-nginx:80` on the external Docker network `proxy`. Confirm that the temporary hostname resolves to the gateway and that the gateway can serve it. Set `INTERPRETERS_HOST` in the Caddy environment when importing `infra/Caddyfile.interpreters`, and set the matching HTTPS origin as `PUBLIC_BASE_URL` in the app environment file.
+The shared Caddy proxy terminates TLS and reaches `interpreters-nginx:80` on the external Docker network `proxy`. Port `80` here belongs to the Nginx container. The VPS Compose stack receives HTTP traffic entirely through the gateway. Confirm that the temporary hostname resolves to the gateway and that the gateway can serve it. Set `INTERPRETERS_HOST` in the Caddy environment when importing `infra/Caddyfile.interpreters`, and set the matching HTTPS origin as `PUBLIC_BASE_URL` in the app environment file.
 
 After reloading the gateway, check the home page and `/health` through that origin. The health endpoint checks PostgreSQL and Meilisearch.
 

@@ -1,3 +1,5 @@
+name: interpreters
+
 services:
   nginx:
     image: ${IMAGE_NGINX:?Set IMAGE_NGINX}

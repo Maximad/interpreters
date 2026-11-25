@@ -131,8 +131,13 @@ jobs:
             else
               echo 'Interpreter checkout could not be located in the configured deployment directory.'
             fi
+            for port in 80 443; do
+              listeners=$(ss -H -ltn "sport = :$port" | wc -l)
+              printf 'Host TCP %s listeners: %s\n' "$port" "$listeners"
+            done
             read_containers() {
-              "$@" ps -a --filter name=interpreters --format '{{.Names}} {{.Image}} {{.Status}}'
+              "$@" ps -a --filter name=interpreters --format '{{.Names}} {{.Image}} {{.Status}}' &&
+              "$@" ps --filter label=com.docker.compose.project=gateway --format 'Gateway {{.Names}} ports={{.Ports}} networks={{.Networks}}'
             }
             if ! read_containers docker && ! read_containers sudo -n docker; then
               echo 'The deployment account needs access to Docker to report container status.' >&2
