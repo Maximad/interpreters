@@ -1,7 +1,7 @@
 FROM node:22-bookworm AS base
 WORKDIR /app
 COPY package.json package-lock.json ./
-COPY apps/api/package.json ./apps/api/package.json
+COPY --chown=node:node apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
 
 FROM base AS build
@@ -11,9 +11,9 @@ RUN npm run prisma:generate -w @im/api && npm run build -w @im/api
 
 FROM base AS runtime
 ENV NODE_ENV=production
-COPY apps/api/prisma ./apps/api/prisma
+COPY --chown=node:node apps/api/prisma ./apps/api/prisma
 RUN npm ci --omit=dev --workspace @im/api && npm run prisma:generate -w @im/api
-COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY --from=build --chown=node:node /app/apps/api/dist ./apps/api/dist
 USER node
 WORKDIR /app/apps/api
 EXPOSE 4000
