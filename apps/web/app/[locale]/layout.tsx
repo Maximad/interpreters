@@ -1,8 +1,7 @@
 import { NextIntlClientProvider } from 'next-intl';
-import { getMessages, getTranslations } from 'next-intl/server';
+import { getMessages } from 'next-intl/server';
 import type { ReactNode } from 'react';
-import { LanguageSwitcher } from '../../components/language-switcher';
-import { Link } from '../../i18n/navigation';
+import { SiteNav } from '../../components/site-nav';
 import { ToastProvider } from '../../components/providers/toast-provider';
 import { LocaleDocumentSync } from '../../components/providers/locale-document-sync';
 
@@ -15,27 +14,14 @@ function isRtl(locale: string) {
 export default async function LocaleLayout({ children, params }: { children: ReactNode; params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const messages = await getMessages({ locale });
-  const t = await getTranslations({ locale, namespace: 'nav' });
   const rtl = isRtl(locale);
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
       <ToastProvider>
         <LocaleDocumentSync locale={locale} rtl={rtl} />
-        <div className={`min-h-screen bg-slate-50 text-slate-900 ${rtl ? 'font-[Tahoma,Arial,sans-serif]' : 'font-[Inter,system-ui,sans-serif]'}`}>
-          <header className="border-b bg-white">
-            <nav className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3">
-              <div className="flex flex-wrap items-center gap-x-4 text-sm font-medium [&>a]:py-1.5">
-                <Link href="/">{t('home')}</Link>
-                <Link href="/search">{t('search')}</Link>
-                <Link href="/auth/login">{t('login')}</Link>
-                <Link href="/auth/register">{t('register')}</Link>
-                <Link href="/interpreter/profile-wizard">{t('profileWizard')}</Link>
-                <Link href="/client/broadcast">{t('broadcast')}</Link>
-              </div>
-              <LanguageSwitcher />
-            </nav>
-          </header>
+        <div dir={rtl ? 'rtl' : 'ltr'} className={`min-h-screen bg-canvas text-ink ${rtl ? 'font-[Tahoma,Arial,sans-serif]' : 'font-[Inter,system-ui,sans-serif]'}`}>
+          <SiteNav />
           <main className="mx-auto w-full max-w-6xl px-4 py-6">{children}</main>
         </div>
       </ToastProvider>

@@ -88,6 +88,7 @@ assert.equal(verificationPage.status, 200);
 assert.equal(new URL(verificationPage.url).pathname, '/en/auth/verify-email');
 for (const [path, heading] of [
   ['/en', 'Interpreter Marketplace'],
+  ['/en/search', 'Find interpreters'],
   ['/ar/auth/verify-email', 'إعادة إرسال رسالة التحقق'],
   ['/en/admin/profiles', 'Interpreter profiles awaiting review'],
   ['/en/interpreter/profile-wizard', 'Interpreter Marketplace'],
@@ -98,6 +99,10 @@ for (const [path, heading] of [
   assert.equal(page.status, 200, path);
   assert.ok((await page.text()).includes(heading), path);
 }
+const hero = await fetch(`${web}/images/interpreter-meeting.webp`);
+assert.equal(hero.status, 200, 'Home page image');
+assert.match(hero.headers.get('content-type') ?? '', /^image\/webp\b/);
+await hero.arrayBuffer();
 
 const options = await api('/profile/options');
 const arabic = options.languages.find((language) => language.name === 'Arabic');

@@ -1,15 +1,26 @@
 {
   "nav": {
     "home": "Home",
-    "search": "Search",
-    "login": "Login",
-    "register": "Register",
-    "profileWizard": "Profile Wizard",
-    "broadcast": "Request"
+    "search": "Find interpreters",
+    "login": "Log in",
+    "register": "Create account",
+    "profileWizard": "Interpreter profile",
+    "broadcast": "Post a request",
+    "brand": "Nass Interpreters",
+    "shortBrand": "Nass",
+    "mainNavigation": "Main navigation",
+    "menu": "Menu"
   },
   "home": {
     "title": "Interpreter Marketplace",
-    "subtitle": "Find and book trusted interpreters across multiple languages and domains."
+    "subtitle": "Book remote or on-site interpreting for meetings and events. Search by language, specialty, or city.",
+    "headline": "Find the right interpreter.",
+    "findInterpreters": "Find interpreters",
+    "postRequest": "Post a request",
+    "meetingImageAlt": "A small team in conversation around a meeting table",
+    "interpreterHeading": "Are you an interpreter?",
+    "interpreterDescription": "Create a profile with your language pairs, specialties, and rates.",
+    "join": "Create an account"
   },
   "auth": {
     "login": "Login",
@@ -37,14 +48,35 @@
   "search": {
     "title": "Find interpreters",
     "filters": "Filters",
-    "languages": "Languages",
-    "domains": "Domains",
-    "cities": "Cities",
-    "applyFilters": "Apply filters",
+    "languages": "Language",
+    "domains": "Specialty",
+    "cities": "City",
+    "applyFilters": "Search",
     "fallbackHeadline": "Professional interpreter",
     "rate": "Rate",
     "notSpecified": "Not specified",
-    "viewProfile": "View profile"
+    "viewProfile": "View profile",
+    "description": "Browse approved profiles and find an interpreter for your next meeting or event.",
+    "any": {
+      "languages": "Any language",
+      "domains": "Any specialty",
+      "cities": "Any city"
+    },
+    "loadingOptions": "Loading filters…",
+    "optionsError": "Could not load the filters.",
+    "retry": "Try again",
+    "loadingResults": "Finding interpreters…",
+    "searchError": "Could not load interpreter profiles.",
+    "noProfiles": "No profiles are listed yet",
+    "requestSuggestion": "You can still post an interpreting request and find it in your dashboard.",
+    "noMatches": "No profiles match these filters",
+    "filterSuggestion": "Try clearing the filters to see more interpreters.",
+    "profileCount": "{count, plural, one {# interpreter found} other {# interpreters found}}",
+    "clearFilters": "Clear filters",
+    "ratePerHour": "{price} per hour",
+    "rateOnRequest": "Rate on request",
+    "previousPage": "Previous page",
+    "nextPage": "Next page"
   },
   "profileWizard": {
     "title": "Interpreter profile wizard",

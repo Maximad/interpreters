@@ -1,15 +1,26 @@
 {
   "nav": {
     "home": "الرئيسية",
-    "search": "بحث",
+    "search": "ابحث عن مترجمين",
     "login": "دخول",
     "register": "إنشاء حساب",
-    "profileWizard": "الملف الشخصي",
-    "broadcast": "طلب مترجم"
+    "profileWizard": "ملف المترجم",
+    "broadcast": "أرسل طلبًا",
+    "brand": "ناس للترجمة",
+    "shortBrand": "ناس",
+    "mainNavigation": "القائمة الرئيسية",
+    "menu": "القائمة"
   },
   "home": {
     "title": "سوق المترجمين",
-    "subtitle": "ابحث واحجز مترجمين موثوقين عبر لغات ومجالات متعددة."
+    "subtitle": "احجز ترجمة فورية لاجتماعاتك وفعالياتك عن بُعد أو حضوريًا. ابحث حسب اللغة أو التخصص أو المدينة.",
+    "headline": "اعثر على المترجم المناسب.",
+    "findInterpreters": "ابحث عن مترجمين",
+    "postRequest": "أرسل طلبًا",
+    "meetingImageAlt": "فريق صغير يتحدث حول طاولة اجتماع",
+    "interpreterHeading": "هل تعمل في الترجمة الفورية؟",
+    "interpreterDescription": "أنشئ ملفًا تعريفيًا يوضح أزواج اللغات وتخصصاتك وأسعارك.",
+    "join": "أنشئ حسابًا"
   },
   "auth": {
     "login": "تسجيل الدخول",
@@ -29,11 +40,33 @@
   "search": {
     "title": "ابحث عن مترجمين",
     "filters": "الفلاتر",
-    "languages": "اللغات",
-    "domains": "المجالات",
-    "cities": "المدن",
-    "applyFilters": "تطبيق الفلاتر",
-    "viewProfile": "عرض الملف"
+    "languages": "اللغة",
+    "domains": "التخصص",
+    "cities": "المدينة",
+    "applyFilters": "بحث",
+    "viewProfile": "عرض الملف",
+    "description": "تصفّح الملفات المعتمدة واعثر على مترجم فوري لاجتماعك أو فعاليتك المقبلة.",
+    "any": {
+      "languages": "أي لغة",
+      "domains": "أي تخصص",
+      "cities": "أي مدينة"
+    },
+    "loadingOptions": "جارٍ تحميل خيارات البحث…",
+    "optionsError": "تعذّر تحميل خيارات البحث.",
+    "retry": "حاول مرة أخرى",
+    "loadingResults": "جارٍ البحث عن مترجمين…",
+    "searchError": "تعذّر تحميل ملفات المترجمين.",
+    "noProfiles": "لا توجد ملفات معروضة بعد",
+    "requestSuggestion": "يمكنك إرسال طلب ترجمة فورية ومتابعته من لوحة طلباتك.",
+    "noMatches": "لا توجد ملفات مطابقة لهذه الخيارات",
+    "filterSuggestion": "امسح خيارات البحث لعرض المزيد من المترجمين.",
+    "profileCount": "عدد المترجمين في النتائج {count, number}",
+    "clearFilters": "مسح الفلاتر",
+    "ratePerHour": "{price} في الساعة",
+    "rateOnRequest": "السعر عند الطلب",
+    "fallbackHeadline": "مترجم فوري محترف",
+    "previousPage": "الصفحة السابقة",
+    "nextPage": "الصفحة التالية"
   },
   "profileWizard": {
     "loading": "جارٍ تحميل ملفك الشخصي…",
