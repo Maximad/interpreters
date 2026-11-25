@@ -44,6 +44,8 @@ The script uses `/etc/caddy/sites/interpreters-temporary.caddy`. If the gateway 
 
 Run `scripts/deploy-web-console.sh HOSTNAME --route-only` to publish a healthy deployment whose environment already uses that HTTPS origin. This mode checks the service from the gateway and applies the route without rebuilding the app.
 
+If the fresh deployment is healthy and its route has yet to be published, run `scripts/deploy-web-console.sh HOSTNAME --set-origin RELEASE_DIR` to publish it with a different hostname. Point DNS at the VPS first. Pass the release directory used for the running images. This mode backs up the app environment, updates its URL and allowed origin, and refreshes the API and Nginx containers from the existing images.
+
 ## Verify and deploy
 
 In GitHub Actions, run **CI, Image Publish and VPS Deploy** with `check-vps` for a read-only report of the interpreter checkout and containers. For a verified `main` deployment, choose `deploy-vps`. The workflow builds and verifies the stack, publishes the three images, and deploys those exact digests.

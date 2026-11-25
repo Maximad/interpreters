@@ -9,9 +9,9 @@ die() {
 
 site_host=${1:-}
 mode=${2:-}
-[[ ( $# -eq 1 || ( $# -eq 2 && $mode == --route-only ) ) &&
+[[ ( $# -eq 1 || ( $# -eq 2 && $mode == --route-only ) || ( $# -eq 3 && $mode == --set-origin ) ) &&
    $site_host =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && $site_host == *.* && $site_host != *..* ]] ||
-  die "Use deploy-web-console.sh HOSTNAME [--route-only]."
+  die "Use deploy-web-console.sh HOSTNAME [--route-only | --set-origin RELEASE_DIR]."
 origin="https://$site_host"
 
 gateway=gateway-caddy-1
@@ -54,7 +54,16 @@ trap 'exit 1' HUP INT TERM
 printf '%s {\n  reverse_proxy interpreters-nginx:80\n}\n' "$site_host" > "$work_dir/site"
 
 check_health() {
-  python3 -c 'import json, sys; sys.exit(json.load(sys.stdin).get("status") != "ok")'
+  python3 -c '
+import json
+import sys
+
+try:
+    response = json.load(sys.stdin)
+except ValueError:
+    sys.exit(1)
+sys.exit(not isinstance(response, dict) or response.get("status") != "ok")
+'
 }
 
 capture_gateway() {
@@ -117,12 +126,66 @@ else
 fi
 
 if [[ $mode != --route-only ]]; then
-  project_root=$(cd -- "$(dirname -- "$0")/.." && pwd)
+  if [[ $mode == --set-origin ]]; then
+    project_root=$3
+  else
+    project_root=$(cd -- "$(dirname -- "$0")/.." && pwd)
+  fi
   cd "$project_root"
   revision=$(git rev-parse HEAD)
   git diff --quiet HEAD || die "The release checkout has tracked changes."
   env_marker="# Initialized by deploy-web-console.sh at $revision"
 
+  mapfile -t compose_env_keys < <(sed -nE 's/^([A-Z][A-Z0-9_]+)=.*/\1/p' .env.example)
+  compose() (
+    unset "${compose_env_keys[@]}"
+    IMAGE_API="interpreters-api:sha-$revision" IMAGE_WEB="interpreters-web:sha-$revision" IMAGE_NGINX="interpreters-nginx:sha-$revision" \
+      docker compose -p interpreters --env-file "$env_file" -f infra/docker-compose.yml -f infra/docker-compose.vps.yml "$@"
+  )
+fi
+
+apply_api_environment() {
+  compose config --quiet &&
+    compose up -d --no-deps --no-build --pull never --wait --wait-timeout 90 api &&
+    # Nginx resolves the API address at startup.
+    compose up -d --no-deps --no-build --pull never --force-recreate --wait --wait-timeout 90 nginx
+}
+
+if [[ $mode == --set-origin ]]; then
+  grep -Fxq "$env_marker" "$env_file" ||
+    die "The supplied release does not match the environment for the running deployment."
+  api_image=$(docker inspect interpreters-api-1 --format '{{.Config.Image}}')
+  [[ "$api_image" == "interpreters-api:sha-$revision" ]] ||
+    die "The running API image does not match the supplied release."
+  old_origin=$(sed -n 's/^PUBLIC_BASE_URL=//p' "$env_file")
+  [[ -n "$old_origin" ]] && grep -Fxq "CORS_ORIGINS=$old_origin" "$env_file" ||
+    die "The app's URL and allowed origins need review before changing the hostname."
+
+  temp_env=$(mktemp "${env_file}.XXXXXX")
+  awk -v origin="$origin" '
+    /^PUBLIC_BASE_URL=/ { public_count++; $0 = "PUBLIC_BASE_URL=" origin }
+    /^CORS_ORIGINS=/ { cors_count++; $0 = "CORS_ORIGINS=" origin }
+    { print }
+    END { if (public_count != 1 || cors_count != 1) exit 1 }
+  ' "$env_file" > "$temp_env" || die "Expected one setting each for PUBLIC_BASE_URL and CORS_ORIGINS."
+
+  env_backup=
+  if ! cmp -s "$temp_env" "$env_file"; then
+    env_backup=$(mktemp "${env_file}.origin-backup.XXXXXX")
+    cp -- "$env_file" "$env_backup"
+    mv -T -- "$temp_env" "$env_file"
+    printf 'Saved the previous app environment to %s\n' "$env_backup"
+  fi
+
+  if ! apply_api_environment; then
+    if [[ -n "$env_backup" ]]; then
+      cp -- "$env_backup" "$temp_env"
+      mv -T -- "$temp_env" "$env_file"
+      apply_api_environment || die "The prior environment was restored. Check the API and Nginx containers."
+    fi
+    die "The interpreter API could not start with the requested URL."
+  fi
+elif [[ $mode != --route-only ]]; then
   if [[ -e "$env_file" ]]; then
     grep -Fxq "$env_marker" "$env_file" && grep -Fxq "PUBLIC_BASE_URL=$origin" "$env_file" ||
       die "There is an existing interpreter environment. Use the upgrade instructions for existing data."
@@ -177,13 +240,6 @@ PY
     } > "$temp_env"
     ln -- "$temp_env" "$env_file"
   fi
-
-  mapfile -t compose_env_keys < <(sed -nE 's/^([A-Z][A-Z0-9_]+)=.*/\1/p' .env.example)
-  compose() (
-    unset "${compose_env_keys[@]}"
-    IMAGE_API="interpreters-api:sha-$revision" IMAGE_WEB="interpreters-web:sha-$revision" IMAGE_NGINX="interpreters-nginx:sha-$revision" \
-      docker compose -p interpreters --env-file "$env_file" -f infra/docker-compose.yml -f infra/docker-compose.vps.yml "$@"
-  )
 
   compose config --quiet
   for component in api web nginx; do
