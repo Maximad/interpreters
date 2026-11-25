@@ -8,18 +8,15 @@ die() {
 }
 
 site_host=${1:-}
-[[ $# -eq 1 && $site_host =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && $site_host == *.* && $site_host != *..* ]] ||
-  die "Pass one DNS hostname, such as interpreters.example.com."
+mode=${2:-}
+[[ ( $# -eq 1 || ( $# -eq 2 && $mode == --route-only ) ) &&
+   $site_host =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$ && $site_host == *.* && $site_host != *..* ]] ||
+  die "Use deploy-web-console.sh HOSTNAME [--route-only]."
 origin="https://$site_host"
-project_root=$(cd -- "$(dirname -- "$0")/.." && pwd)
-cd "$project_root"
-revision=$(git rev-parse HEAD)
-git diff --quiet HEAD || die "The release checkout has tracked changes."
 
 gateway=gateway-caddy-1
 caddyfile=/etc/caddy/Caddyfile
 env_file=/etc/interpreters/interpreters.env
-env_marker="# Initialized by deploy-web-console.sh at $revision"
 exec 9>/run/lock/interpreters-deploy.lock
 flock -n 9 || die "An interpreter deployment is already running."
 
@@ -33,18 +30,32 @@ work_dir=$(mktemp -d)
 route_file="$sites_dir/interpreters-temporary.caddy"
 route_installed=false
 route_loaded=false
+caddyfile_source=
+caddyfile_changed=false
+caddyfile_backup=
 temp_site=
 temp_env=
 cleanup() {
-  if $route_installed && ! $route_loaded && cmp -s "$work_dir/site" "$route_file"; then
-    rm -- "$route_file"
+  if ! $route_loaded; then
+    if $caddyfile_changed && ! cat -- "$caddyfile_backup" > "$caddyfile_source"; then
+      printf 'Restore the gateway configuration from %s.\n' "$caddyfile_backup" >&2
+      return
+    fi
+    if $route_installed && cmp -s "$work_dir/site" "$route_file"; then
+      rm -- "$route_file"
+    fi
   fi
   if [[ -n "$temp_env" ]]; then rm -f -- "$temp_env"; fi
   if [[ -n "$temp_site" ]]; then rm -f -- "$temp_site"; fi
   rm -r -- "$work_dir"
 }
 trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
 printf '%s {\n  reverse_proxy interpreters-nginx:80\n}\n' "$site_host" > "$work_dir/site"
+
+check_health() {
+  python3 -c 'import json, sys; sys.exit(json.load(sys.stdin).get("status") != "ok")'
+}
 
 capture_gateway() {
   docker exec "$gateway" caddy adapt --config "$caddyfile" --adapter caddyfile > "$work_dir/base.json"
@@ -82,7 +93,7 @@ if active != base:
 config = load("candidate.json") if stage == "candidate" else base
 http = config.get("apps", {}).get("http", {})
 matches = [
-    route for route in objects(http)
+    (route, pattern.lower()) for route in objects(http)
     for matcher in route.get("match", [])
     for pattern in matcher.get("host", [])
     if fnmatch.fnmatchcase(hostname, pattern.lower())
@@ -90,8 +101,8 @@ matches = [
 if stage == "free":
     if matches:
         sys.exit("The temporary hostname already matches a gateway route.")
-elif len(matches) != 1 or not any(
-    item.get("dial") == "interpreters-nginx:80" for item in objects(matches[0])
+elif len(matches) != 1 or matches[0][1] != hostname or not any(
+    item.get("dial") == "interpreters-nginx:80" for item in objects(matches[0][0])
 ):
     sys.exit("Caddy's imported configuration did not contain the expected interpreter route.")
 PY
@@ -105,13 +116,20 @@ else
   check_gateway free
 fi
 
-if [[ -e "$env_file" ]]; then
-  grep -Fxq "$env_marker" "$env_file" && grep -Fxq "PUBLIC_BASE_URL=$origin" "$env_file" ||
-    die "There is an existing interpreter environment. Use the upgrade instructions for existing data."
-else
-  old_env=/opt/interpreters/.env
-  if [[ -e "$old_env" ]]; then
-    python3 - "$old_env" <<'PY'
+if [[ $mode != --route-only ]]; then
+  project_root=$(cd -- "$(dirname -- "$0")/.." && pwd)
+  cd "$project_root"
+  revision=$(git rev-parse HEAD)
+  git diff --quiet HEAD || die "The release checkout has tracked changes."
+  env_marker="# Initialized by deploy-web-console.sh at $revision"
+
+  if [[ -e "$env_file" ]]; then
+    grep -Fxq "$env_marker" "$env_file" && grep -Fxq "PUBLIC_BASE_URL=$origin" "$env_file" ||
+      die "There is an existing interpreter environment. Use the upgrade instructions for existing data."
+  else
+    old_env=/opt/interpreters/.env
+    if [[ -e "$old_env" ]]; then
+      python3 - "$old_env" <<'PY'
 from pathlib import Path
 import re
 import sys
@@ -132,58 +150,63 @@ if database_url:
     if not local or "${" in database_url:
         sys.exit("The older database target needs review before initializing a fresh database.")
 PY
-  fi
-  volumes=$(docker volume ls --format '{{.Name}}')
-  project_volumes=$(docker volume ls -q --filter label=com.docker.compose.project=interpreters)
-  containers=$(docker ps -a --format '{{.Names}}')
-  if [[ -n "$project_volumes" ]] || grep -Eq '^(interpreters|infra)_(postgres|redis|meili)_data$' <<< "$volumes" ||
-     grep -Eq '^interpreters[-_]' <<< "$containers"; then
-    die "Existing interpreter data or containers were found. Check them before initializing a fresh database."
+    fi
+    volumes=$(docker volume ls --format '{{.Name}}')
+    project_volumes=$(docker volume ls -q --filter label=com.docker.compose.project=interpreters)
+    containers=$(docker ps -a --format '{{.Names}}')
+    if [[ -n "$project_volumes" ]] || grep -Eq '^(interpreters|infra)_(postgres|redis|meili)_data$' <<< "$volumes" ||
+       grep -Eq '^interpreters[-_]' <<< "$containers"; then
+      die "Existing interpreter data or containers were found. Check them before initializing a fresh database."
+    fi
+
+    mkdir -p "$(dirname -- "$env_file")"
+    temp_env=$(mktemp "${env_file}.XXXXXX")
+    postgres_password=$(openssl rand -hex 32)
+    jwt_secret=$(openssl rand -hex 48)
+    meili_key=$(openssl rand -hex 32)
+    {
+      printf '%s\n' "$env_marker"
+      sed -E '/^(IMAGE_API|IMAGE_WEB|IMAGE_NGINX|POSTGRES_PASSWORD|DATABASE_URL|JWT_SECRET|MEILI_MASTER_KEY|PUBLIC_BASE_URL|CORS_ORIGINS)=/d' .env.example
+      printf 'IMAGE_API=interpreters-api:sha-%s\n' "$revision"
+      printf 'IMAGE_WEB=interpreters-web:sha-%s\n' "$revision"
+      printf 'IMAGE_NGINX=interpreters-nginx:sha-%s\n' "$revision"
+      printf 'POSTGRES_PASSWORD=%s\n' "$postgres_password"
+      printf 'DATABASE_URL=postgresql://postgres:%s@postgres:5432/interpreter_marketplace?schema=public\n' "$postgres_password"
+      printf 'JWT_SECRET=%s\nMEILI_MASTER_KEY=%s\n' "$jwt_secret" "$meili_key"
+      printf 'PUBLIC_BASE_URL=%s\nCORS_ORIGINS=%s\n' "$origin" "$origin"
+    } > "$temp_env"
+    ln -- "$temp_env" "$env_file"
   fi
 
-  mkdir -p "$(dirname -- "$env_file")"
-  temp_env=$(mktemp "${env_file}.XXXXXX")
-  postgres_password=$(openssl rand -hex 32)
-  jwt_secret=$(openssl rand -hex 48)
-  meili_key=$(openssl rand -hex 32)
-  {
-    printf '%s\n' "$env_marker"
-    sed -E '/^(IMAGE_API|IMAGE_WEB|IMAGE_NGINX|POSTGRES_PASSWORD|DATABASE_URL|JWT_SECRET|MEILI_MASTER_KEY|PUBLIC_BASE_URL|CORS_ORIGINS)=/d' .env.example
-    printf 'IMAGE_API=interpreters-api:sha-%s\n' "$revision"
-    printf 'IMAGE_WEB=interpreters-web:sha-%s\n' "$revision"
-    printf 'IMAGE_NGINX=interpreters-nginx:sha-%s\n' "$revision"
-    printf 'POSTGRES_PASSWORD=%s\n' "$postgres_password"
-    printf 'DATABASE_URL=postgresql://postgres:%s@postgres:5432/interpreter_marketplace?schema=public\n' "$postgres_password"
-    printf 'JWT_SECRET=%s\nMEILI_MASTER_KEY=%s\n' "$jwt_secret" "$meili_key"
-    printf 'PUBLIC_BASE_URL=%s\nCORS_ORIGINS=%s\n' "$origin" "$origin"
-  } > "$temp_env"
-  ln -- "$temp_env" "$env_file"
+  mapfile -t compose_env_keys < <(sed -nE 's/^([A-Z][A-Z0-9_]+)=.*/\1/p' .env.example)
+  compose() (
+    unset "${compose_env_keys[@]}"
+    IMAGE_API="interpreters-api:sha-$revision" IMAGE_WEB="interpreters-web:sha-$revision" IMAGE_NGINX="interpreters-nginx:sha-$revision" \
+      docker compose -p interpreters --env-file "$env_file" -f infra/docker-compose.yml -f infra/docker-compose.vps.yml "$@"
+  )
+
+  compose config --quiet
+  for component in api web nginx; do
+    case "$component" in
+      nginx) dockerfile=infra/nginx.Dockerfile ;;
+      *) dockerfile="apps/$component/Dockerfile" ;;
+    esac
+    image="interpreters-$component:sha-$revision"
+    if ! docker image inspect "$image" >/dev/null 2>&1; then
+      printf 'Building interpreter %s image\n' "$component"
+      docker build --label "org.opencontainers.image.revision=$revision" -t "$image" -f "$dockerfile" .
+    fi
+  done
+
+  compose up -d --pull missing --wait --wait-timeout 240
+else
+  grep -Fxq "PUBLIC_BASE_URL=$origin" "$env_file" ||
+    die "The running interpreter deployment must be configured for $origin."
 fi
 
-mapfile -t compose_env_keys < <(sed -nE 's/^([A-Z][A-Z0-9_]+)=.*/\1/p' .env.example)
-compose() (
-  unset "${compose_env_keys[@]}"
-  IMAGE_API="interpreters-api:sha-$revision" IMAGE_WEB="interpreters-web:sha-$revision" IMAGE_NGINX="interpreters-nginx:sha-$revision" \
-    docker compose -p interpreters --env-file "$env_file" -f infra/docker-compose.yml -f infra/docker-compose.vps.yml "$@"
-)
-
-compose config --quiet
-for component in api web nginx; do
-  case "$component" in
-    nginx) dockerfile=infra/nginx.Dockerfile ;;
-    *) dockerfile="apps/$component/Dockerfile" ;;
-  esac
-  image="interpreters-$component:sha-$revision"
-  if ! docker image inspect "$image" >/dev/null 2>&1; then
-    printf 'Building interpreter %s image\n' "$component"
-    docker build --label "org.opencontainers.image.revision=$revision" -t "$image" -f "$dockerfile" .
-  fi
-done
-
-compose up -d --pull missing --wait --wait-timeout 240
-compose exec -T nginx wget -Y off -qO- http://127.0.0.1/health
-echo
-echo 'Interpreter containers are healthy.'
+docker exec "$gateway" wget -Y off -qO- http://interpreters-nginx:80/health | check_health ||
+  die "Caddy could not reach a healthy interpreter service on the proxy network."
+echo 'Caddy can reach the healthy interpreter service.'
 
 capture_gateway
 if [[ -e "$route_file" ]]; then
@@ -198,16 +221,42 @@ else
   rm -- "$temp_site"
   temp_site=
   docker exec "$gateway" caddy adapt --config "$caddyfile" --adapter caddyfile > "$work_dir/candidate.json"
+  if cmp -s "$work_dir/base.json" "$work_dir/candidate.json"; then
+    caddyfile_source=$(docker inspect "$gateway" --format '{{range .Mounts}}{{if eq .Destination "/etc/caddy/Caddyfile"}}{{.Source}}{{end}}{{end}}')
+    [[ -f "$caddyfile_source" ]] || die "Caddy needs a mounted Caddyfile to add the interpreter site import."
+    docker exec "$gateway" cat "$caddyfile" > "$work_dir/Caddyfile.original"
+    {
+      cat "$work_dir/Caddyfile.original"
+      printf '\n\nimport /etc/caddy/sites/interpreters-temporary.caddy\n'
+    } > "$work_dir/Caddyfile"
+    docker exec -i -w /etc/caddy "$gateway" caddy adapt --config - --adapter caddyfile \
+      < "$work_dir/Caddyfile" > "$work_dir/candidate.json"
+  fi
   check_gateway candidate
   docker exec -i "$gateway" caddy validate --config - < "$work_dir/candidate.json"
+  docker exec "$gateway" wget -Y off -qO- http://127.0.0.1:2019/config/ > "$work_dir/active.json"
+  check_gateway candidate
+  if [[ -n "$caddyfile_source" ]]; then
+    cmp -s "$caddyfile_source" "$work_dir/Caddyfile.original" ||
+      die "The mounted Caddyfile changed during deployment."
+    caddyfile_backup=$(mktemp "${caddyfile_source}.interpreters-backup.XXXXXX")
+    cat "$work_dir/Caddyfile.original" > "$caddyfile_backup"
+    printf 'Saved the original Caddyfile to %s\n' "$caddyfile_backup"
+    # Preserve the mounted inode so Caddy sees the change inside its container.
+    caddyfile_changed=true
+    cat "$work_dir/Caddyfile" > "$caddyfile_source"
+    docker exec "$gateway" caddy adapt --config "$caddyfile" --adapter caddyfile > "$work_dir/persisted.json"
+    cmp -s "$work_dir/candidate.json" "$work_dir/persisted.json" ||
+      die "Caddy did not read the expected gateway configuration after saving the import."
+  fi
   docker exec -i "$gateway" caddy reload --config - < "$work_dir/candidate.json"
   route_loaded=true
 fi
 
 printf 'Checking %s/health\n' "$origin"
-curl -fsS --connect-timeout 5 --max-time 10 --retry 6 --retry-all-errors --retry-delay 3 "$origin/health" ||
+curl -fsS --connect-timeout 5 --max-time 10 --retry 6 --retry-all-errors --retry-delay 3 "$origin/health" |
+  check_health ||
   die "The containers are healthy and Caddy has loaded the route. The public HTTPS health check needs follow-up."
-echo
 printf 'Interpreter Marketplace deployed at %s\n' "$origin"
 if grep -Fxq 'SMTP_URL=' "$env_file"; then
   printf 'Set SMTP_URL and SMTP_FROM in %s to enable email verification.\n' "$env_file"

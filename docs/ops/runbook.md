@@ -40,7 +40,9 @@ After reloading the gateway, check the home page and `/health` through that orig
 
 For a fresh installation, fetch the verified revision into a separate release directory and run `scripts/deploy-web-console.sh HOSTNAME` from the root Web console. It builds the release images, creates a private environment file, and starts the `interpreters` project. After the stack passes its internal health check, the script validates the new site file with the shared Caddy gateway and checks public HTTPS.
 
-The one-time script expects Caddy to import `.caddy` site files from `/etc/caddy/sites` and stops if the hostname matches an existing gateway route. Use the database upgrade instructions when interpreter data or a production environment already exists.
+The script uses `/etc/caddy/sites/interpreters-temporary.caddy`. If the gateway does not load the site file, the script backs up the mounted Caddyfile and adds an import for that file. The hostname must be available in the gateway. Use the database upgrade instructions when interpreter data or a production environment already exists.
+
+Run `scripts/deploy-web-console.sh HOSTNAME --route-only` to publish a healthy deployment whose environment already uses that HTTPS origin. This mode checks the service from the gateway and applies the route without rebuilding the app.
 
 ## Verify and deploy
 
