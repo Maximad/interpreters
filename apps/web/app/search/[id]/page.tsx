@@ -1,28 +1,29 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
-export default function InterpreterProfileDetailPage({ params }: { params: { id: string } }) {
+export default function InterpreterProfileDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [profile, setProfile] = useState<any>(null);
   const [message, setMessage] = useState('');
   const [details, setDetails] = useState('');
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
-    fetch(`${apiBase}/search/interpreters/${params.id}`, { cache: 'no-store' })
+    fetch(`${apiBase}/search/interpreters/${id}`, { cache: 'no-store' })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => setProfile(data));
-  }, [params.id]);
+  }, [id]);
 
   async function requestQuote() {
     const token = localStorage.getItem('im_token');
     const response = await fetch(`${apiBase}/direct-inquiries`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ interpreterProfileId: params.id, message, details })
+      body: JSON.stringify({ interpreterProfileId: id, message, details })
     });
     const data = await response.json();
     setNotice(data.message || 'Direct inquiry sent. Interpreter has been notified.');

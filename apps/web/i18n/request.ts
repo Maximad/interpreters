@@ -19,7 +19,8 @@ function deepMerge<T extends Record<string, any>>(base: T, custom: T): T {
   return output as T;
 }
 
-export default getRequestConfig(async ({ locale }) => {
+export default getRequestConfig(async ({ requestLocale }) => {
+  const locale = await requestLocale;
   if (!locale || !routing.locales.includes(locale as (typeof routing.locales)[number])) {
     notFound();
   }
@@ -30,6 +31,7 @@ export default getRequestConfig(async ({ locale }) => {
     : (await import(`../messages/${locale}.json`)).default;
 
   return {
+    locale,
     messages: deepMerge(enMessages, localeMessages)
   };
 });

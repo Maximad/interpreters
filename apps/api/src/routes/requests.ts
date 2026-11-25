@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { NotificationChannel, type Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../plugins/prisma';
+import { languagePair } from '../utils/language-pair';
 import {
   booleanEquals,
   numberGreaterThanOrEqual,
@@ -39,12 +40,14 @@ function startOfToday() {
 
 export function meiliFilter(input: z.infer<typeof broadcastSchema>) {
   const clauses: string[] = [
-    `(${stringEquals('languages', input.sourceLanguage)} OR ${stringEquals('languages', input.targetLanguage)})`,
-    `(${stringEquals('domains', input.domain)})`,
-    `(${stringEquals('cities', input.city)})`,
-    `(${booleanEquals('onsite_enabled', input.onsiteRequired)})`,
-    `(${booleanEquals('remote_enabled', input.remoteAllowed)})`
+    `(${stringEquals('language_pairs', languagePair(input.sourceLanguage, input.targetLanguage))})`,
+    `(${stringEquals('domains', input.domain)})`
   ];
+  if (input.onsiteRequired) {
+    clauses.push(`(${stringEquals('cities', input.city)})`, `(${booleanEquals('onsite_enabled', true)})`);
+  } else if (input.remoteAllowed) {
+    clauses.push(`(${booleanEquals('remote_enabled', true)})`);
+  }
 
   if (typeof input.budgetMinAed === 'number') clauses.push(`(${numberGreaterThanOrEqual('hourly_rate_aed', input.budgetMinAed)})`);
   if (typeof input.budgetMaxAed === 'number') clauses.push(`(${numberLessThanOrEqual('hourly_rate_aed', input.budgetMaxAed)})`);
@@ -64,6 +67,12 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
     if (countToday >= dailyRequestLimit) return reply.status(429).send({ message: 'Daily broadcast request limit reached' });
 
     const input = parsed.data;
+    if (!input.onsiteRequired && !input.remoteAllowed) {
+      return reply.status(400).send({ message: 'Choose on-site or remote interpreting' });
+    }
+    if (languagePair(input.sourceLanguage, input.targetLanguage) === languagePair(input.targetLanguage, input.sourceLanguage)) {
+      return reply.status(400).send({ message: 'Choose two different languages' });
+    }
     const meiliResult = await app.meiliClient.index(app.meiliIndexName).search('', {
       filter: meiliFilter(input),
       limit: recipientCapDefault,
@@ -80,57 +89,59 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
       })
       .slice(0, recipientCapDefault);
 
-    const created = await prisma.request.create({
-      data: {
-        client_user_id: request.user.sub,
-        source_language: input.sourceLanguage,
-        target_language: input.targetLanguage,
-        domain: input.domain,
-        city: input.city,
-        onsite_required: input.onsiteRequired,
-        remote_allowed: input.remoteAllowed,
-        scheduled_for: new Date(input.scheduledFor),
-        budget_min_aed: input.budgetMinAed,
-        budget_max_aed: input.budgetMaxAed,
-        notes: input.notes
-      }
-    });
-
     const profiles = await prisma.interpreterProfile.findMany({
-      where: { id: { in: profileIds } },
-      include: { user: true }
+      where: { id: { in: profileIds }, status: 'APPROVED' },
+      select: { id: true, user_id: true, opt_out_broadcast_emails: true }
     });
 
-    await prisma.requestRecipient.createMany({
-      data: profiles.map((profile) => ({ request_id: created.id, interpreter_profile_id: profile.id, notified_at: new Date() }))
-    });
-
-    const notificationRows: Prisma.NotificationCreateManyInput[] = profiles.flatMap((profile) => {
-      const base = {
-        user_id: profile.user_id,
-        category: 'BROADCAST_REQUEST',
-        payload: { requestId: created.id, domain: created.domain, city: created.city }
-      };
-
-      if (profile.opt_out_broadcast_emails) {
-        return [{ ...base, channel: NotificationChannel.DASHBOARD }];
-      }
-
-      return [
-        { ...base, channel: NotificationChannel.DASHBOARD },
-        {
-          ...base,
-          channel: NotificationChannel.EMAIL,
-          payload: {
-            requestId: created.id,
-            subject: 'New broadcast interpreting request',
-            body: `Domain: ${created.domain} | City: ${created.city} | Time: ${created.scheduled_for.toISOString()}`
+    const created = await prisma.$transaction(async (db) => {
+      const newRequest = await db.request.create({
+        data: {
+          client_user_id: request.user.sub,
+          source_language: input.sourceLanguage,
+          target_language: input.targetLanguage,
+          domain: input.domain,
+          city: input.city,
+          onsite_required: input.onsiteRequired,
+          remote_allowed: input.remoteAllowed,
+          scheduled_for: new Date(input.scheduledFor),
+          budget_min_aed: input.budgetMinAed,
+          budget_max_aed: input.budgetMaxAed,
+          notes: input.notes,
+          recipients: {
+            create: profiles.map((profile) => ({ interpreter_profile_id: profile.id, notified_at: new Date() }))
           }
         }
-      ];
-    });
+      });
 
-    if (notificationRows.length) await prisma.notification.createMany({ data: notificationRows });
+      const notificationRows: Prisma.NotificationCreateManyInput[] = profiles.flatMap((profile) => {
+        const base = {
+          user_id: profile.user_id,
+          category: 'BROADCAST_REQUEST',
+          payload: { requestId: newRequest.id, domain: newRequest.domain, city: newRequest.city }
+        };
+
+        if (profile.opt_out_broadcast_emails) {
+          return [{ ...base, channel: NotificationChannel.DASHBOARD }];
+        }
+
+        return [
+          { ...base, channel: NotificationChannel.DASHBOARD },
+          {
+            ...base,
+            channel: NotificationChannel.EMAIL,
+            payload: {
+              requestId: newRequest.id,
+              subject: 'New broadcast interpreting request',
+              body: `Languages: ${newRequest.source_language} → ${newRequest.target_language}\nDomain: ${newRequest.domain}\nCity: ${newRequest.city}\nTime: ${newRequest.scheduled_for.toISOString()}`
+            }
+          }
+        ];
+      });
+
+      if (notificationRows.length) await db.notification.createMany({ data: notificationRows });
+      return newRequest;
+    });
 
     return { request: created, matchedCount: profiles.length, recipientCap: recipientCapDefault };
   });
@@ -156,37 +167,36 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!recipient) return reply.status(403).send({ message: 'Not a matched recipient for this request' });
 
-    const quote = await prisma.quote.upsert({
-      where: {
-        request_id_interpreter_profile_id: {
-          request_id: params.data.id,
-          interpreter_profile_id: profile.id
+    const quote = await prisma.$transaction(async (db) => {
+      // Lock the request while quoting so acceptance and quote updates cannot race.
+      const open = await db.request.updateMany({ where: { id: params.data.id, status: 'OPEN' }, data: { status: 'OPEN' } });
+      if (open.count === 0) return null;
+
+      const key = { request_id: params.data.id, interpreter_profile_id: profile.id };
+      const where = { request_id_interpreter_profile_id: key };
+      const existing = await db.quote.findUnique({ where });
+      const message = body.data.message ?? null;
+      if (existing?.amount_aed.equals(body.data.amountAed) && existing.message === message) return existing;
+
+      const values = { amount_aed: body.data.amountAed, message };
+      const saved = await db.quote.upsert({
+        where,
+        create: { ...key, ...values, client_user_id: recipient.request.client_user_id },
+        update: values
+      });
+
+      await db.notification.create({
+        data: {
+          user_id: recipient.request.client_user_id,
+          channel: 'DASHBOARD',
+          category: 'QUOTE_SUBMITTED',
+          payload: { requestId: params.data.id, quoteId: saved.id, amountAed: body.data.amountAed }
         }
-      },
-      create: {
-        request_id: params.data.id,
-        interpreter_profile_id: profile.id,
-        client_user_id: recipient.request.client_user_id,
-        amount_aed: body.data.amountAed,
-        message: body.data.message,
-        status: 'PENDING'
-      },
-      update: {
-        amount_aed: body.data.amountAed,
-        message: body.data.message,
-        status: 'PENDING'
-      }
+      });
+      return saved;
     });
 
-    await prisma.notification.create({
-      data: {
-        user_id: recipient.request.client_user_id,
-        channel: 'DASHBOARD',
-        category: 'QUOTE_SUBMITTED',
-        payload: { requestId: params.data.id, quoteId: quote.id, amountAed: body.data.amountAed }
-      }
-    });
-
+    if (!quote) return reply.status(409).send({ message: 'This request is no longer open' });
     return quote;
   });
 
@@ -211,34 +221,52 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
     const reqRow = await prisma.request.findFirst({ where: { id: parsed.data.id, client_user_id: request.user.sub } });
     if (!reqRow) return reply.status(404).send({ message: 'Request not found' });
 
-    const accepted = await prisma.quote.findFirst({ where: { id: parsed.data.quoteId, request_id: reqRow.id } });
-    if (!accepted) return reply.status(404).send({ message: 'Quote not found' });
+    const quoteId = parsed.data.quoteId;
+    const result = await prisma.$transaction(async (db) => {
+      const selected = await db.quote.findFirst({ where: { id: quoteId, request_id: reqRow.id } });
+      if (!selected) return 'missing';
 
-    await prisma.$transaction([
-      prisma.quote.update({ where: { id: accepted.id }, data: { status: 'ACCEPTED' } }),
-      prisma.quote.updateMany({ where: { request_id: reqRow.id, id: { not: accepted.id } }, data: { status: 'REJECTED' } }),
-      prisma.request.update({ where: { id: reqRow.id }, data: { status: 'FILLED', filled_quote_id: accepted.id } })
-    ]);
+      const filled = await db.request.updateMany({
+        where: { id: reqRow.id, status: 'OPEN' },
+        data: { status: 'FILLED', filled_quote_id: quoteId }
+      });
+      if (filled.count === 0) {
+        const current = await db.request.findUniqueOrThrow({ where: { id: reqRow.id } });
+        return current.status === 'FILLED' && current.filled_quote_id === quoteId ? 'accepted' : 'closed';
+      }
 
-    const allQuotes = await prisma.quote.findMany({
-      where: { request_id: reqRow.id },
-      include: { interpreter_profile: true }
+      await db.quote.update({ where: { id: quoteId }, data: { status: 'ACCEPTED' } });
+      await db.quote.updateMany({ where: { request_id: reqRow.id, id: { not: quoteId } }, data: { status: 'REJECTED' } });
+
+      const quotes = await db.quote.findMany({
+        where: { request_id: reqRow.id },
+        select: { id: true, interpreter_profile: { select: { user_id: true } } }
+      });
+      await db.notification.createMany({
+        data: quotes.map((quote) => ({
+          user_id: quote.interpreter_profile.user_id,
+          channel: 'DASHBOARD',
+          category: quote.id === quoteId ? 'QUOTE_ACCEPTED' : 'QUOTE_REJECTED',
+          payload: { requestId: reqRow.id, quoteId: quote.id }
+        }))
+      });
+      return 'accepted';
     });
 
-    await prisma.notification.createMany({
-      data: allQuotes.map((quote) => ({
-        user_id: quote.interpreter_profile.user_id,
-        channel: 'DASHBOARD',
-        category: quote.id === accepted.id ? 'QUOTE_ACCEPTED' : 'QUOTE_REJECTED',
-        payload: { requestId: reqRow.id, quoteId: quote.id }
-      }))
-    });
-
-    return { message: 'Quote accepted and request filled', requestId: reqRow.id, acceptedQuoteId: accepted.id };
+    if (result === 'missing') return reply.status(404).send({ message: 'Quote not found' });
+    if (result === 'closed') return reply.status(409).send({ message: 'This request is no longer open' });
+    return { message: 'Quote accepted and request filled', requestId: reqRow.id, acceptedQuoteId: quoteId };
   });
 
   app.get('/dashboard/client/requests', { preHandler: app.authorize(['CLIENT']) }, async (request) => {
-    return prisma.request.findMany({ where: { client_user_id: request.user.sub }, include: { quotes: true, recipients: true }, orderBy: { created_at: 'desc' } });
+    return prisma.request.findMany({
+      where: { client_user_id: request.user.sub },
+      include: {
+        quotes: { include: { interpreter_profile: { select: { user: { select: { full_name: true } } } } } },
+        recipients: true
+      },
+      orderBy: { created_at: 'desc' }
+    });
   });
 
   app.get('/dashboard/interpreter/requests', { preHandler: app.authorize(['INTERPRETER']) }, async (request) => {
@@ -247,7 +275,7 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
 
     return prisma.requestRecipient.findMany({
       where: { interpreter_profile_id: profile.id },
-      include: { request: true },
+      include: { request: { include: { quotes: { where: { interpreter_profile_id: profile.id } } } } },
       orderBy: { sent_at: 'desc' }
     });
   });

@@ -13,7 +13,10 @@
     "role": "الدور",
     "client": "عميل",
     "interpreter": "مترجم",
-    "verificationToken": "رمز التحقق"
+    "verificationToken": "رمز التحقق",
+    "resendVerification": "إعادة إرسال رسالة التحقق",
+    "resendSuccess": "إذا كان حسابك بحاجة إلى التحقق، فقد تم طلب رسالة جديدة.",
+    "resendError": "تعذّر طلب رسالة التحقق."
   },
   "search": {
     "title": "ابحث عن مترجمين",
@@ -23,5 +26,67 @@
     "cities": "المدن",
     "applyFilters": "تطبيق الفلاتر",
     "viewProfile": "عرض الملف"
+  },
+  "profileWizard": {
+    "loading": "جارٍ تحميل ملفك الشخصي…",
+    "loadError": "تعذّر تحميل ملفك الشخصي.",
+    "choose": "اختر من القائمة",
+    "city": "مدينة الإقامة",
+    "sourceLanguage": "اللغة المصدر",
+    "targetLanguage": "اللغة المستهدفة",
+    "addPair": "إضافة زوج لغوي",
+    "invalidPairs": "اختر لغتين مختلفتين لكل زوج واحذف الأزواج المكررة.",
+    "removeLast": "حذف العنصر الأخير",
+    "domains": "التخصصات",
+    "coveredCities": "مدن العمل",
+    "hourlyRate": "سعر الساعة بالدرهم الإماراتي",
+    "experience": "سنوات الخبرة",
+    "availability": "أوقات التوفر",
+    "certificate": "اسم الشهادة",
+    "certificateUrl": "رابط الشهادة",
+    "addCertificate": "إضافة شهادة",
+    "back": "رجوع",
+    "submit": "إرسال للمراجعة",
+    "status": {
+      "DRAFT": "مسودة",
+      "PENDING": "قيد المراجعة",
+      "APPROVED": "معتمد",
+      "REJECTED": "بحاجة إلى تعديل"
+    }
+  },
+  "requestFlow": {
+    "choose": "اختر من القائمة",
+    "mode": "طريقة الترجمة الفورية",
+    "scheduledFor": "التاريخ والوقت",
+    "matchedCount": "أُرسل الطلب إلى المترجمين المطابقين. العدد {count}.",
+    "noMatches": "تم حفظ الطلب. لا يوجد حاليًا مترجمون مطابقون لهذه المتطلبات.",
+    "refresh": "تحديث",
+    "loadError": "تعذّر تحميل الطلبات.",
+    "noRequests": "لا توجد طلبات حتى الآن.",
+    "noQuotes": "لا توجد عروض أسعار حتى الآن.",
+    "quoteAmount": "إجمالي العرض بالدرهم الإماراتي",
+    "submitQuote": "إرسال عرض السعر",
+    "updateQuote": "تعديل عرض السعر",
+    "acceptQuote": "قبول عرض السعر",
+    "quoteError": "تعذّر حفظ عرض السعر.",
+    "requestStatus": {
+      "OPEN": "مفتوح",
+      "FILLED": "تم الحجز",
+      "CLOSED": "مغلق"
+    },
+    "quoteStatus": {
+      "PENDING": "قيد الانتظار",
+      "ACCEPTED": "مقبول",
+      "REJECTED": "مرفوض"
+    }
+  },
+  "adminReview": {
+    "title": "ملفات المترجمين قيد المراجعة",
+    "loading": "جارٍ تحميل الملفات…",
+    "empty": "لا توجد ملفات قيد المراجعة.",
+    "approve": "اعتماد الملف",
+    "reject": "طلب تعديلات",
+    "reason": "التعديلات المطلوبة",
+    "error": "تعذّر إكمال مراجعة الملف."
   }
 }

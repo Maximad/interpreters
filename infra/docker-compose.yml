@@ -1,6 +1,6 @@
 services:
   nginx:
-    image: ${IMAGE_NGINX:-ghcr.io/your-org/interpreters-nginx:latest}
+    image: ${IMAGE_NGINX:?Set IMAGE_NGINX}
     container_name: interpreters-nginx
     restart: unless-stopped
     depends_on:
@@ -12,7 +12,7 @@ services:
       - default
       - proxy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:80/health || exit 1"]
+      test: ["CMD", "wget", "-Y", "off", "-qO-", "http://127.0.0.1/health"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -24,16 +24,13 @@ services:
         max-file: "3"
 
   web:
-    image: ${IMAGE_WEB:-ghcr.io/your-org/interpreters-web:latest}
+    image: ${IMAGE_WEB:?Set IMAGE_WEB}
     restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
     depends_on:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/ >/dev/null || exit 1"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/en').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -41,33 +38,30 @@ services:
     logging: *default-logging
 
   migrate:
-    image: ${IMAGE_API:-ghcr.io/your-org/interpreters-api:latest}
+    image: ${IMAGE_API:?Set IMAGE_API}
     restart: "no"
     environment:
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      REDIS_URL: ${REDIS_URL}
-      MEILISEARCH_URL: ${MEILISEARCH_URL}
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
-      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY}
-      MEILISEARCH_INTERPRETERS_INDEX: ${MEILISEARCH_INTERPRETERS_INDEX}
-    command: ["npm", "run", "prisma:migrate"]
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+    command: ["sh", "-ec", "npm run prisma:migrate && npm run seed:production"]
     depends_on:
       postgres:
         condition: service_healthy
     logging: *default-logging
 
   api:
-    image: ${IMAGE_API:-ghcr.io/your-org/interpreters-api:latest}
+    image: ${IMAGE_API:?Set IMAGE_API}
     restart: unless-stopped
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN}
-      CORS_ORIGINS: ${CORS_ORIGINS}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      SMTP_URL: ${SMTP_URL:-}
+      SMTP_FROM: ${SMTP_FROM:-}
       REDIS_URL: ${REDIS_URL}
       MEILISEARCH_URL: ${MEILISEARCH_URL}
       MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY}
@@ -107,7 +101,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -137,11 +131,11 @@ services:
     environment:
       MEILI_ENV: production
       MEILI_NO_ANALYTICS: "true"
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
+      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:?Set MEILI_MASTER_KEY}
     volumes:
       - meili_data:/meili_data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:7700/health >/dev/null || exit 1"]
+      test: ["CMD", "wget", "-Y", "off", "-qO-", "http://127.0.0.1:7700/health"]
       interval: 15s
       timeout: 5s
       retries: 10

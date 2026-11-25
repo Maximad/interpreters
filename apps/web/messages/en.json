@@ -29,7 +29,10 @@
     "verifySuccess": "Email verified successfully.",
     "loginError": "Unable to login.",
     "registerError": "Unable to register.",
-    "verifyError": "Unable to verify email."
+    "verifyError": "Unable to verify email.",
+    "resendVerification": "Resend verification email",
+    "resendSuccess": "If your account needs verification, a new email has been requested.",
+    "resendError": "Could not request a verification email."
   },
   "search": {
     "title": "Find interpreters",
@@ -54,7 +57,32 @@
     "saved": "Saved successfully",
     "successTitle": "Saved",
     "errorTitle": "Error",
-    "saveError": "Could not save this step"
+    "saveError": "Could not save this step",
+    "loading": "Loading your profile…",
+    "loadError": "Could not load your profile.",
+    "choose": "Select an option",
+    "city": "Based in",
+    "sourceLanguage": "Source language",
+    "targetLanguage": "Target language",
+    "addPair": "Add language pair",
+    "invalidPairs": "Choose two different languages for each pair and remove duplicates.",
+    "removeLast": "Remove last",
+    "domains": "Specialties",
+    "coveredCities": "Cities covered",
+    "hourlyRate": "Hourly rate (AED)",
+    "experience": "Years of experience",
+    "availability": "Availability",
+    "certificate": "Certification name",
+    "certificateUrl": "Certification link",
+    "addCertificate": "Add certification",
+    "back": "Back",
+    "submit": "Submit for review",
+    "status": {
+      "DRAFT": "Draft",
+      "PENDING": "Awaiting review",
+      "APPROVED": "Approved",
+      "REJECTED": "Needs changes"
+    }
   },
   "requestFlow": {
     "loading": "Loading...",
@@ -79,6 +107,39 @@
     "interpreterDashboard": "Interpreter dashboard",
     "loadDashboard": "Load dashboard",
     "successTitle": "Success",
-    "errorTitle": "Error"
+    "errorTitle": "Error",
+    "choose": "Select an option",
+    "mode": "Interpreting mode",
+    "scheduledFor": "Date and time",
+    "matchedCount": "{count, plural, one {Request sent to # matched interpreter.} other {Request sent to # matched interpreters.}}",
+    "noMatches": "Request saved. No interpreters matched these requirements.",
+    "refresh": "Refresh",
+    "loadError": "Could not load requests.",
+    "noRequests": "No requests yet.",
+    "noQuotes": "No quotes yet.",
+    "quoteAmount": "Quote total (AED)",
+    "submitQuote": "Submit quote",
+    "updateQuote": "Update quote",
+    "acceptQuote": "Accept quote",
+    "quoteError": "Could not save the quote.",
+    "requestStatus": {
+      "OPEN": "Open",
+      "FILLED": "Booked",
+      "CLOSED": "Closed"
+    },
+    "quoteStatus": {
+      "PENDING": "Pending",
+      "ACCEPTED": "Accepted",
+      "REJECTED": "Declined"
+    }
+  },
+  "adminReview": {
+    "title": "Interpreter profiles awaiting review",
+    "loading": "Loading profiles…",
+    "empty": "No profiles awaiting review.",
+    "approve": "Approve profile",
+    "reject": "Request changes",
+    "reason": "Changes needed",
+    "error": "Could not complete the profile review."
   }
 }

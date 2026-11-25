@@ -12,8 +12,9 @@ export default fp(async function meilisearchPlugin(fastify) {
   fastify.decorate('meiliIndexName', indexName);
 
   const index = client.index(indexName);
-  await index.updateFilterableAttributes([
+  const filterable = await index.updateFilterableAttributes([
     'languages',
+    'language_pairs',
     'domains',
     'cities',
     'onsite_enabled',
@@ -23,5 +24,7 @@ export default fp(async function meilisearchPlugin(fastify) {
     'is_email_verified'
   ]);
 
-  await index.updateSortableAttributes(['is_email_verified', 'profile_completeness', 'updated_at']);
+  const sortable = await index.updateSortableAttributes(['is_email_verified', 'profile_completeness', 'updated_at']);
+  const results = await Promise.all([filterable, sortable].map(({ taskUid }) => client.waitForTask(taskUid)));
+  if (results.some((task) => task.status !== 'succeeded')) throw new Error('Interpreter search settings could not be applied');
 });

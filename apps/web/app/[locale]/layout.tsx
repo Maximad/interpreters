@@ -12,7 +12,8 @@ function isRtl(locale: string) {
   return ['ar', 'fa'].includes(locale);
 }
 
-export default async function LocaleLayout({ children, params: { locale } }: { children: ReactNode; params: { locale: string } }) {
+export default async function LocaleLayout({ children, params }: { children: ReactNode; params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
   const messages = await getMessages({ locale });
   const t = await getTranslations({ locale, namespace: 'nav' });
   const rtl = isRtl(locale);

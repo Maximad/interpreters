@@ -5,12 +5,13 @@ import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
 import { Button } from '../../../../components/ui/button';
 import { useToast } from '../../../../components/providers/toast-provider';
-
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+import { Link, useRouter } from '../../../../i18n/navigation';
+import { errorMessage, requestJson } from '../../../../lib/api';
 
 export default function RegisterPage() {
   const t = useTranslations('auth');
   const { showToast } = useToast();
+  const router = useRouter();
 
   async function handleSubmit(formData: FormData) {
     const payload = {
@@ -20,19 +21,13 @@ export default function RegisterPage() {
       role: String(formData.get('role') || 'CLIENT')
     };
 
-    const response = await fetch(`${apiBase}/auth/signup`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      showToast({ title: t('errorTitle'), description: data.message || t('registerError'), tone: 'error' });
-      return;
+    try {
+      await requestJson('/auth/signup', { method: 'POST', body: JSON.stringify(payload) });
+      showToast({ title: t('successTitle'), description: t('registerSuccess') });
+      router.push('/auth/verify-email');
+    } catch (error) {
+      showToast({ title: t('errorTitle'), description: errorMessage(error, t('registerError')), tone: 'error' });
     }
-
-    showToast({ title: t('successTitle'), description: t('registerSuccess') });
   }
 
   return (
@@ -51,6 +46,7 @@ export default function RegisterPage() {
         </div>
         <Button className="w-full" type="submit">{t('register')}</Button>
       </form>
+      <Link className="mt-4 inline-block text-sm text-blue-700" href="/auth/verify-email">{t('verifyEmail')}</Link>
     </section>
   );
 }

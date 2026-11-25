@@ -110,10 +110,20 @@ async function ensureInterpreter(userId: string) {
 }
 
 export const profileRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/profile/options', async () => {
+    const orderBy = { name: 'asc' } as const;
+    const [languages, domains, cities] = await Promise.all([
+      prisma.language.findMany({ orderBy }),
+      prisma.domain.findMany({ orderBy }),
+      prisma.city.findMany({ orderBy })
+    ]);
+    return { languages, domains, cities };
+  });
+
   app.get('/profile/me', { preHandler: app.authorize(['INTERPRETER']) }, async (request, reply) => {
     const profile = await prisma.interpreterProfile.findUnique({
       where: { user_id: request.user.sub },
-      include: { languages: true, domains: true, cities: true, certifications: true }
+      include: { languages: true, domains: true, cities: true, certifications: true, user: { select: { full_name: true } } }
     });
 
     if (!profile) return reply.status(404).send({ message: 'Profile not found' });
@@ -127,13 +137,17 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
     const allowed = await ensureInterpreter(request.user.sub);
     if (!allowed) return reply.status(403).send({ message: 'Forbidden' });
 
-    await prisma.user.update({ where: { id: request.user.sub }, data: { full_name: parsed.data.fullName } });
+    const city = await prisma.city.findUnique({ where: { id: parsed.data.cityId } });
+    if (!city) return reply.status(400).send({ message: 'Select a valid city' });
 
     const profile = await upsertProfile(request.user.sub);
-    await prisma.interpreterProfile.update({
-      where: { id: profile.id },
-      data: { headline: parsed.data.headline, bio: `Based in city #${parsed.data.cityId}` }
-    });
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: request.user.sub }, data: { full_name: parsed.data.fullName } }),
+      prisma.interpreterProfile.update({
+        where: { id: profile.id },
+        data: { headline: parsed.data.headline, bio: `Based in ${city.name}` }
+      })
+    ]);
 
     return refreshCompleteness(request.user.sub);
   });
@@ -244,6 +258,21 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
 
     await upsertInterpreterProfileToIndex(prisma, app.meiliClient, app.meiliIndexName, updated.id);
     return updated;
+  });
+
+  app.get('/admin/profiles/pending', { preHandler: app.authorize(['ADMIN']) }, async () => {
+    return prisma.interpreterProfile.findMany({
+      where: { status: ProfileStatus.PENDING },
+      orderBy: { submitted_at: 'asc' },
+      take: 100,
+      select: {
+        id: true,
+        headline: true,
+        languages: { select: { direction: true } },
+        certifications: { select: { id: true, name: true, file_url: true } },
+        user: { select: { full_name: true } }
+      }
+    });
   });
 
   app.post('/admin/profiles/:id/review', { preHandler: app.authorize(['ADMIN']) }, async (request, reply) => {

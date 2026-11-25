@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../plugins/prisma';
 import { hashPassword, hashToken, makeToken, verifyPassword } from '../utils/security';
+import { emailConfigured, publicOrigin, sendEmail } from '../utils/email';
 
 const signupSchema = z.object({
   email: z.string().email(),
@@ -18,6 +19,16 @@ const loginSchema = z.object({
 const verifyEmailSchema = z.object({
   token: z.string().min(10)
 });
+
+const resendSchema = z.object({ email: z.string().email() });
+
+function newVerification() {
+  const token = makeToken();
+  return {
+    token,
+    record: { token: hashToken(token), expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000) }
+  };
+}
 
 type RateLimitResult = {
   allowed: boolean;
@@ -49,12 +60,13 @@ function checkRateLimit(key: string, maxAttempts: number, windowMs: number): Rat
 
 function enforceAuthRateLimit(
   requestIp: string,
-  route: 'signup' | 'login' | 'verify-email'
+  route: 'signup' | 'login' | 'verify-email' | 'resend-verification'
 ): RateLimitResult {
   const limits = {
     signup: { maxAttempts: 10, windowMs: 15 * 60 * 1000 },
     login: { maxAttempts: 20, windowMs: 15 * 60 * 1000 },
-    'verify-email': { maxAttempts: 30, windowMs: 15 * 60 * 1000 }
+    'verify-email': { maxAttempts: 30, windowMs: 15 * 60 * 1000 },
+    'resend-verification': { maxAttempts: 8, windowMs: 15 * 60 * 1000 }
   } as const;
 
   const selected = limits[route];
@@ -62,6 +74,21 @@ function enforceAuthRateLimit(
 }
 
 export const authRoutes: FastifyPluginAsync = async (app) => {
+  const origin = publicOrigin();
+  const canSendVerification = Boolean(origin && emailConfigured());
+  const production = process.env.NODE_ENV === 'production';
+
+  async function deliverVerification(email: string, token: string) {
+    if (!canSendVerification) {
+      app.log.info({ token }, 'Email verification token generated for local testing');
+      return;
+    }
+
+    const link = new URL('/auth/verify-email', origin);
+    link.hash = new URLSearchParams({ token }).toString();
+    await sendEmail(email, 'Verify your Interpreter Marketplace email', `Open this link to verify your email address:\n\n${link}\n\nThe link expires in 24 hours.`);
+  }
+
   app.post('/auth/signup', async (request, reply) => {
     const rateResult = enforceAuthRateLimit(request.ip, 'signup');
     if (!rateResult.allowed) {
@@ -75,36 +102,62 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
     if (!parsed.success) {
       return reply.status(400).send({ error: parsed.error.flatten() });
     }
+    if (production && !canSendVerification) {
+      return reply.status(503).send({ message: 'Account registration is temporarily unavailable.' });
+    }
 
     const { email, password, fullName, role } = parsed.data;
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return reply.status(409).send({ message: 'Email already exists' });
 
-    const user = await prisma.user.create({
+    const verification = newVerification();
+    await prisma.user.create({
       data: {
         email,
         full_name: fullName,
         password_hash: hashPassword(password),
-        role
+        role,
+        email_verification_tokens: { create: verification.record }
       }
     });
 
-    const token = makeToken();
-    await prisma.emailVerificationToken.create({
-      data: {
-        user_id: user.id,
-        token: hashToken(token),
-        expires_at: new Date(Date.now() + 1000 * 60 * 60 * 24)
-      }
-    });
-
-    if (process.env.NODE_ENV !== 'production') {
-      app.log.info({ email, token }, 'Email verification token generated for local testing');
+    try {
+      await deliverVerification(email, verification.token);
+    } catch {
+      app.log.warn('Verification email delivery failed during signup');
+      return reply.status(503).send({ message: 'Account created. Use the verification page to resend the email.' });
     }
 
     return {
       message: 'Account created. Please check your email to verify your account.'
     };
+  });
+
+  app.post('/auth/resend-verification', async (request, reply) => {
+    const rateResult = enforceAuthRateLimit(request.ip, 'resend-verification');
+    if (!rateResult.allowed) {
+      return reply.header('Retry-After', String(rateResult.retryAfterSeconds)).status(429)
+        .send({ message: 'Too many attempts. Please try again later.' });
+    }
+
+    const parsed = resendSchema.safeParse(request.body);
+    if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    if (production && !canSendVerification) {
+      return reply.status(503).send({ message: 'Verification email delivery is temporarily unavailable.' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email: parsed.data.email } });
+    if (user && !user.is_email_verified) {
+      const verification = newVerification();
+      await prisma.emailVerificationToken.create({ data: { user_id: user.id, ...verification.record } });
+      try {
+        await deliverVerification(user.email, verification.token);
+      } catch {
+        app.log.warn('Verification email delivery failed during resend');
+      }
+    }
+
+    return { message: 'If this account needs verification, a new email has been requested.' };
   });
 
   app.post('/auth/verify-email', async (request, reply) => {
@@ -127,16 +180,20 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ message: 'Invalid or expired verification token' });
     }
 
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: tokenRecord.user_id },
+    const verified = await prisma.$transaction(async (db) => {
+      const updated = await db.user.updateMany({
+        where: { id: tokenRecord.user_id, is_email_verified: false },
         data: { is_email_verified: true }
-      }),
-      prisma.emailVerificationToken.update({
-        where: { id: tokenRecord.id },
+      });
+      if (updated.count === 0) return false;
+      await db.emailVerificationToken.updateMany({
+        where: { user_id: tokenRecord.user_id, consumed_at: null },
         data: { consumed_at: new Date() }
-      })
-    ]);
+      });
+      return true;
+    });
+
+    if (!verified) return reply.status(400).send({ message: 'Invalid or expired verification token' });
 
     return { message: 'Email verified successfully' };
   });

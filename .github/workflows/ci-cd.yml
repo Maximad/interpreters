@@ -1,128 +1,173 @@
-name: CI and Image Publish
+name: CI, Image Publish and VPS Deploy
 
 on:
+  pull_request:
+    branches: [main]
   push:
-    branches:
-      - main
-    tags:
-      - 'v*'
+    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Workflow operation
+        type: choice
+        options: [verify, check-vps, deploy-vps]
+        default: verify
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAMESPACE: ${{ github.repository }}
+permissions:
+  contents: read
 
 jobs:
-  build-and-test:
+  verify:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode != 'check-vps'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
         with:
-          node-version: '20'
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
           cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate -w @im/api
+      - run: npm run lint:ci
+      - run: npm test -w @im/api
+      - run: npm run compose:verify
+      - run: make local
+      - run: node scripts/smoke-test.mjs
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Prisma generate
-        run: npm run prisma:generate -w @im/api
-
-      - name: Lint (non-interactive)
-        run: npm run lint:ci
-
-      - name: Web Docker-compatible build check
-        run: npm run build:web:docker
-
-      - name: Type/build check
-        run: npm run build
-
-  build-and-push-images:
+  publish:
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    needs: verify
     runs-on: ubuntu-latest
-    needs: build-and-test
     permissions:
       contents: read
       packages: write
+    outputs:
+      image_api: ${{ steps.registry.outputs.namespace }}/api@${{ steps.api.outputs.digest }}
+      image_web: ${{ steps.registry.outputs.namespace }}/web@${{ steps.web.outputs.digest }}
+      image_nginx: ${{ steps.registry.outputs.namespace }}/nginx@${{ steps.nginx.outputs.digest }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - uses: actions/checkout@v6
         with:
-          registry: ${{ env.REGISTRY }}
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata (api)
-        id: meta_api
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/api
-          tags: |
-            type=sha,format=short,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=tag
-
-      - name: Extract Docker metadata (web)
-        id: meta_web
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/web
-          tags: |
-            type=sha,format=short,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=tag
-
-      - name: Extract Docker metadata (nginx)
-        id: meta_nginx
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/nginx
-          tags: |
-            type=sha,format=short,prefix=sha-
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=ref,event=tag
-
-      - name: Build and push api image
+      - name: Set registry namespace
+        id: registry
+        run: |
+          namespace="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "namespace=$namespace" >> "$GITHUB_OUTPUT"
+          for component in api web nginx; do
+            {
+              echo "${component}_tags<<TAGS"
+              echo "$namespace/$component:sha-$GITHUB_SHA"
+              if [ "$GITHUB_REF" = refs/heads/main ]; then
+                echo "$namespace/$component:latest"
+              elif [ "$GITHUB_REF_TYPE" = tag ]; then
+                echo "$namespace/$component:$GITHUB_REF_NAME"
+              fi
+              echo TAGS
+            } >> "$GITHUB_OUTPUT"
+          done
+      - name: Build and publish API
+        id: api
         uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/api/Dockerfile
           push: true
-          tags: ${{ steps.meta_api.outputs.tags }}
-          labels: ${{ steps.meta_api.outputs.labels }}
-
-      - name: Build and push web image
+          tags: ${{ steps.registry.outputs.api_tags }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+      - name: Build and publish web
+        id: web
         uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/web/Dockerfile
           push: true
-          tags: ${{ steps.meta_web.outputs.tags }}
-          labels: ${{ steps.meta_web.outputs.labels }}
-
-      - name: Build and push nginx image
+          tags: ${{ steps.registry.outputs.web_tags }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+      - name: Build and publish nginx
+        id: nginx
         uses: docker/build-push-action@v6
         with:
           context: .
           file: infra/nginx.Dockerfile
           push: true
-          tags: ${{ steps.meta_nginx.outputs.tags }}
-          labels: ${{ steps.meta_nginx.outputs.labels }}
+          tags: ${{ steps.registry.outputs.nginx_tags }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
 
-      - name: Publish image references
-        run: |
-          echo "IMAGE_API=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/api:sha-${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
-          echo "IMAGE_WEB=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/web:sha-${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
-          echo "IMAGE_NGINX=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/nginx:sha-${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Also published: latest (main only) and git tag refs." >> "$GITHUB_STEP_SUMMARY"
+  check-vps:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'check-vps'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read interpreter deployment status
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.VPS_FINGERPRINT }}
+          envs: VPS_APP_DIR
+          script: |
+            set -eu
+            if [ -e "${VPS_APP_DIR:-/opt/interpreters}/.git" ]; then
+              git -C "${VPS_APP_DIR:-/opt/interpreters}" log -1 --format='Checkout %h %s'
+            else
+              echo 'Interpreter checkout could not be located in the configured deployment directory.'
+            fi
+            docker ps -a --filter name=interpreters --format '{{.Names}} {{.Image}} {{.Status}}'
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'deploy-vps' && github.ref == 'refs/heads/main'
+    needs: publish
+    runs-on: ubuntu-latest
+    concurrency:
+      group: interpreters-vps
+      cancel-in-progress: false
+    steps:
+      - name: Deploy the verified images
+        uses: appleboy/ssh-action@v1.2.2
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+          VPS_ENV_FILE: ${{ secrets.VPS_ENV_FILE }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          IMAGE_API: ${{ needs.publish.outputs.image_api }}
+          IMAGE_WEB: ${{ needs.publish.outputs.image_web }}
+          IMAGE_NGINX: ${{ needs.publish.outputs.image_nginx }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          fingerprint: ${{ secrets.VPS_FINGERPRINT }}
+          command_timeout: 10m
+          envs: DEPLOY_SHA,VPS_APP_DIR,VPS_ENV_FILE,GHCR_USERNAME,GHCR_PAT,IMAGE_API,IMAGE_WEB,IMAGE_NGINX
+          script: |
+            set -eu
+            cd "${VPS_APP_DIR:-/opt/interpreters}"
+            ENV_FILE="${VPS_ENV_FILE:-$PWD/.env}"
+
+            if [ "$ENV_FILE" = "$PWD/.env" ] && git ls-files --error-unmatch .env >/dev/null 2>&1; then
+              echo 'Copy the VPS environment file outside the checkout and set VPS_ENV_FILE before updating this checkout.' >&2
+              exit 1
+            fi
+            test -r "$ENV_FILE"
+            git fetch --no-tags origin "$DEPLOY_SHA"
+            git switch --detach "$DEPLOY_SHA"
+
+            if [ -n "${GHCR_PAT:-}" ]; then
+              printf '%s\n' "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+            fi
+            ENV_FILE="$ENV_FILE" ./scripts/deploy.sh

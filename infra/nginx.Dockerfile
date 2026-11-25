@@ -1,2 +1,2 @@
-FROM nginx:1.27-alpine
+FROM nginx:stable-alpine
 COPY infra/nginx.conf /etc/nginx/nginx.conf

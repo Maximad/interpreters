@@ -1,92 +1,59 @@
-# Operations runbook (VPS + Docker Compose)
+# Interpreter Marketplace operations
 
-## Deployment model
+## Prepare a VPS deployment
 
-This project deploys with an **image-only compose pair**:
+The default checkout is `/opt/interpreters`. Use the Compose files `infra/docker-compose.yml` and `infra/docker-compose.vps.yml` with the same Compose project name and volumes as the existing stack.
 
-- `infra/docker-compose.yml` (base, image references, healthchecks, proxy network)
-- `infra/docker-compose.vps.yml` (optional VPS resource overrides)
+Create an environment file outside the checkout, for example `/etc/interpreters/interpreters.env`, using `.env.example` as a reference. On an existing deployment, copy its current production settings to this file before switching revisions. Protect it with mode `600` and give the deploy account read access. Preserve its database and Meilisearch credentials unless you rotate them separately.
 
-The deploy script validates both files, renders merged config, pulls images, runs migrations, and starts services.
+Set the following in the environment file.
 
-## Fresh VPS deploy (single command)
+- `DATABASE_URL`, the `POSTGRES_*` settings, `JWT_SECRET`, and the Meilisearch settings
+- `IMAGE_API`, `IMAGE_WEB`, and `IMAGE_NGINX` to the selected images for a manual deployment
+- `PUBLIC_BASE_URL` to the externally reachable HTTPS origin, such as the temporary hostname
+- `SMTP_URL` and `SMTP_FROM` to an authenticated sender, using URL-encoded credentials in the SMTP URL
+- `CORS_ORIGINS` for any additional permitted browser origins
 
-1. Clone and configure env:
+Registration and verification resend are available after the public origin and email sender are configured. The browser uses the gateway's relative `/api` path, so hostname changes do not require new images.
 
-```bash
-git clone <repo-url> /opt/interpreters
-cd /opt/interpreters
-cp .env.example .env
-# fill all required variables
+## Database upgrades
+
+An empty database applies all migrations and seeds lookup values automatically. A database initialized by an older deployment may already have the schema from `20260217140000_initial`. Back up that database and compare its schema to the migration before marking the baseline applied. If its quote uniqueness index also exists, check whether `20260217150000_quote_request_profile_unique` is already recorded as applied.
+
+Use the candidate release API image to inspect migration status from the target Compose project.
+
+```sh
+docker compose --env-file /etc/interpreters/interpreters.env \
+  -f infra/docker-compose.yml -f infra/docker-compose.vps.yml \
+  run --rm migrate npm exec -- prisma migrate status
 ```
 
-2. Run deploy:
+For an existing schema verified against the baseline, use the same Compose command with `npm exec -- prisma migrate resolve --applied 20260217140000_initial`. Resolve the historical quote index migration separately only if its index already exists and the migration is missing from Prisma's history.
 
-```bash
-make deploy
+## Gateway and temporary hostname
+
+The shared Caddy proxy terminates TLS and reaches `interpreters-nginx:80` on the external Docker network `proxy`. Confirm that the temporary hostname resolves to the gateway and that the gateway can serve it. Set `INTERPRETERS_HOST` in the Caddy environment when importing `infra/Caddyfile.interpreters`, and set the matching HTTPS origin as `PUBLIC_BASE_URL` in the app environment file.
+
+After reloading the gateway, check the home page and `/health` through that origin. The health endpoint checks PostgreSQL and Meilisearch.
+
+## Verify and deploy
+
+In GitHub Actions, run **CI, Image Publish and VPS Deploy** with `check-vps` for a read-only report of the interpreter checkout and containers. For a verified `main` deployment, choose `deploy-vps`. The workflow builds and verifies the stack, publishes the three images, and deploys those exact digests.
+
+The workflow uses `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, and optionally `VPS_PORT`, `VPS_FINGERPRINT`, and `VPS_APP_DIR`. Set `VPS_ENV_FILE` to the external environment file on that server. A private registry also uses `GHCR_USERNAME` and a read-scoped `GHCR_PAT`.
+
+For a manual deploy, select the release checkout and image digests, then run:
+
+```sh
+make deploy ENV_FILE=/etc/interpreters/interpreters.env
 ```
 
-This executes pull/reset, compose config sanity check, image pull, migration run (`migrate` service), and `up -d --remove-orphans`.
+Retain the previous revision and three image digests. To roll back, select that checkout and those digests, then use the same command. Confirm database compatibility before rolling back an application across a schema change.
 
-## Health checks
+For logs, run `make logs ENV_FILE=/etc/interpreters/interpreters.env`.
 
-```bash
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.vps.yml ps
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.vps.yml exec api wget -qO- http://localhost:4000/health
-```
+## Backups and admin access
 
-Gateway-level check:
+Run `ENV_FILE=/etc/interpreters/interpreters.env ./scripts/backup.sh` before a database upgrade. The PostgreSQL dump can restore marketplace data. Meilisearch rebuilds its index from approved profiles. Keep verified backup copies off the VPS.
 
-```bash
-curl -fsS https://<your-domain>/health
-```
-
-## Logs
-
-```bash
-make logs
-# or targeted:
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.vps.yml logs -f nginx api web postgres redis meilisearch
-```
-
-## Restart / rollback
-
-Restart current revision:
-
-```bash
-make restart
-```
-
-Rollback to previous git commit:
-
-```bash
-cd /opt/interpreters
-git log --oneline -n 5
-git reset --hard <previous_commit_sha>
-make deploy
-```
-
-## Backups
-
-```bash
-PROJECT_DIR=/opt/interpreters ./scripts/backup.sh
-```
-
-Restore uses standard PostgreSQL dump restore into the `postgres` service.
-
-## Gateway / TLS notes
-
-TLS termination is handled by the **existing VPS gateway proxy**.
-
-- Domain: `interpreters.jwtalenthouse.com` (or your configured host)
-- Upstream service: `interpreters-nginx`
-- Upstream port: `80`
-- TLS: terminated at gateway, backend traffic on Docker network
-
-Use `infra/Caddyfile.interpreters` as a reference route:
-
-```caddy
-interpreters.jwtalenthouse.com {
-  reverse_proxy interpreters-nginx:80
-}
-```
+An operator can assign the `ADMIN` role to a verified account in PostgreSQL. The account should sign in again after the role change to receive an updated session. Reviewers land on `/en/admin/profiles`.
