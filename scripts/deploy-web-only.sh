@@ -12,8 +12,9 @@ flock -n 9 || die 'Another interpreter deployment is running.'
 im_rev=${1:-}
 im_heading=${2:-}
 im_asset=${3:-}
-if [[ ! $im_rev =~ ^[0-9a-f]{40}$ || -z $im_heading || $im_asset != /* ]]; then
-  printf 'Usage: %s RELEASE_SHA HOME_HEADING ASSET_PATH\n' "$0" >&2
+im_verify_path=${4:-/en}
+if [[ ! $im_rev =~ ^[0-9a-f]{40}$ || -z $im_heading || $im_asset != /* || $im_verify_path != /* ]]; then
+  printf 'Usage: %s RELEASE_SHA EXPECTED_TEXT ASSET_PATH [VERIFY_PATH]\n' "$0" >&2
   exit 1
 fi
 im_env=/etc/interpreters/interpreters.env
@@ -70,7 +71,7 @@ switch_web() {
 }
 verify_web() {
   for attempt in {1..6}; do
-    if curl -fsSL --connect-timeout 4 --max-time 8 -o "$im_page" "$im_origin/en" &&
+    if curl -fsSL --connect-timeout 4 --max-time 8 -o "$im_page" "$im_origin$im_verify_path" &&
        grep -Fq -- "$im_heading" "$im_page" &&
        curl -fsS --connect-timeout 4 --max-time 8 -o /dev/null "$im_origin$im_asset" &&
        curl -fsS --connect-timeout 4 --max-time 8 "$im_origin/health" | grep -Fxq '{"status":"ok"}'; then
@@ -84,7 +85,7 @@ verify_web() {
 compose "$im_next" config --quiet
 cmp -s "$im_env" "$im_prev" || die 'The interpreter environment changed during preparation.'
 if ! switch_web "$im_next" || ! verify_web; then
-  echo 'The new homepage could not be verified. Restoring the previous web image.' >&2
+  echo 'The new web page could not be verified. Restoring the previous web image.' >&2
   switch_web "$im_prev"
   exit 1
 fi
