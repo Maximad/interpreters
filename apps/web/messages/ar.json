@@ -1,4 +1,12 @@
 {
+  "nav": {
+    "home": "الرئيسية",
+    "search": "بحث",
+    "login": "دخول",
+    "register": "إنشاء حساب",
+    "profileWizard": "الملف الشخصي",
+    "broadcast": "طلب مترجم"
+  },
   "home": {
     "title": "سوق المترجمين",
     "subtitle": "ابحث واحجز مترجمين موثوقين عبر لغات ومجالات متعددة."
@@ -78,7 +86,38 @@
       "PENDING": "قيد الانتظار",
       "ACCEPTED": "مقبول",
       "REJECTED": "مرفوض"
-    }
+    },
+    "loading": "جارٍ التحميل…",
+    "broadcastTitle": "اطلب مترجمًا فوريًا",
+    "broadcastAction": "إرسال الطلب",
+    "broadcastError": "تعذّر إرسال طلبك. حاول مرة أخرى.",
+    "sourceLanguage": "اللغة الأصلية",
+    "targetLanguage": "اللغة المطلوبة",
+    "domain": "المجال",
+    "city": "المدينة",
+    "onsite": "حضوريًا",
+    "remote": "عن بُعد",
+    "clientDashboard": "طلباتك",
+    "interpreterDashboard": "لوحة المترجم الفوري",
+    "newRequest": "طلب جديد",
+    "sendingRequest": "جارٍ إرسال الطلب…",
+    "requestSaved": "تم حفظ الطلب",
+    "optionsError": "تعذّر تحميل خيارات النموذج.",
+    "retry": "حاول مرة أخرى",
+    "differentLanguages": "اختر لغة مختلفة للترجمة إليها.",
+    "optionalDetails": "التفاصيل (اختياري)",
+    "detailsTooShort": "أدخل ٥ أحرف على الأقل أو اترك حقل التفاصيل فارغًا.",
+    "timeZoneHint": "أدخل الوقت حسب منطقتك الزمنية المحلية ({timeZone}).",
+    "bookingConfirmed": "تم تأكيد الحجز",
+    "bookedElsewhere": "تم الحجز مع مترجم آخر",
+    "reviewQuote": "أكّد الحجز بالسعر التالي: {price}.",
+    "confirmQuote": "تأكيد الحجز",
+    "confirmingQuote": "جارٍ التأكيد…",
+    "backToQuotes": "العودة إلى العروض",
+    "quoteReviewRequired": "تعذّر قبول عرض السعر. راجع أحدث العروض قبل المحاولة مجددًا.",
+    "optionalMessage": "رسالة (اختياري)",
+    "quoteMessageTooShort": "أدخل ٣ أحرف على الأقل أو اترك الرسالة فارغة.",
+    "quoteSaved": "تم حفظ عرض السعر."
   },
   "adminReview": {
     "title": "ملفات المترجمين قيد المراجعة",

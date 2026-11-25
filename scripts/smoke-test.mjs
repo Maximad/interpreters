@@ -143,13 +143,17 @@ for (const { profileId } of [first, second, reversed]) {
   });
 }
 
+const requestDetails = {
+  sourceLanguage: arabic.name, targetLanguage: english.name, domain: domainName,
+  scheduledFor: new Date(run + 86400000).toISOString()
+};
+await api('/requests/broadcast', {
+  method: 'POST', token: clientToken, expected: 400,
+  payload: { ...requestDetails, onsiteRequired: true, remoteAllowed: false }
+});
 const result = await api('/requests/broadcast', {
-  method: 'POST',
-  token: clientToken,
-  payload: {
-    sourceLanguage: arabic.name, targetLanguage: english.name, domain: domainName, city: abuDhabi.name,
-    onsiteRequired: false, remoteAllowed: true, scheduledFor: new Date(run + 86400000).toISOString()
-  }
+  method: 'POST', token: clientToken,
+  payload: { ...requestDetails, onsiteRequired: false, remoteAllowed: true }
 });
 assert.equal(result.matchedCount, 2);
 const id = result.request.id;
@@ -164,9 +168,14 @@ const firstQuote = await api(quotePath, { method: 'POST', token: first.token, pa
 const repeatedQuote = await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 200 } });
 assert.equal(repeatedQuote.id, firstQuote.id);
 const secondQuote = await api(quotePath, { method: 'POST', token: second.token, payload: { amountAed: 220 } });
+await api(`${quotePath}/${firstQuote.id}/accept`, {
+  method: 'POST', token: clientToken, payload: { expectedAmountAed: 199 }, expected: 409
+});
 
 const decisions = await Promise.all([firstQuote, secondQuote].map((quote) =>
-  apiResponse(`${quotePath}/${quote.id}/accept`, { method: 'POST', token: clientToken })));
+  apiResponse(`${quotePath}/${quote.id}/accept`, {
+    method: 'POST', token: clientToken, payload: { expectedAmountAed: Number(quote.amount_aed) }
+  })));
 assert.deepEqual(decisions.map((response) => response.status).sort(), [200, 409]);
 const accepted = await decisions.find((response) => response.ok).json();
 const dashboard = await api('/dashboard/client/requests', { token: clientToken });

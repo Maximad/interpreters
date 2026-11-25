@@ -14,7 +14,7 @@ const broadcastSchema = z.object({
   sourceLanguage: z.string().min(2),
   targetLanguage: z.string().min(2),
   domain: z.string().min(2),
-  city: z.string().min(2),
+  city: z.string().min(2).optional(),
   onsiteRequired: z.boolean(),
   remoteAllowed: z.boolean(),
   scheduledFor: z.string().datetime(),
@@ -44,7 +44,7 @@ export function meiliFilter(input: z.infer<typeof broadcastSchema>) {
     `(${stringEquals('domains', input.domain)})`
   ];
   if (input.onsiteRequired) {
-    clauses.push(`(${stringEquals('cities', input.city)})`, `(${booleanEquals('onsite_enabled', true)})`);
+    clauses.push(`(${stringEquals('cities', input.city ?? '')})`, `(${booleanEquals('onsite_enabled', true)})`);
   } else if (input.remoteAllowed) {
     clauses.push(`(${booleanEquals('remote_enabled', true)})`);
   }
@@ -69,6 +69,9 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
     const input = parsed.data;
     if (!input.onsiteRequired && !input.remoteAllowed) {
       return reply.status(400).send({ message: 'Choose on-site or remote interpreting' });
+    }
+    if (input.onsiteRequired && !input.city) {
+      return reply.status(400).send({ message: 'Choose a city for on-site interpreting' });
     }
     if (languagePair(input.sourceLanguage, input.targetLanguage) === languagePair(input.targetLanguage, input.sourceLanguage)) {
       return reply.status(400).send({ message: 'Choose two different languages' });
@@ -101,7 +104,7 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
           source_language: input.sourceLanguage,
           target_language: input.targetLanguage,
           domain: input.domain,
-          city: input.city,
+          city: input.city ?? '',
           onsite_required: input.onsiteRequired,
           remote_allowed: input.remoteAllowed,
           scheduled_for: new Date(input.scheduledFor),
@@ -133,7 +136,7 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
             payload: {
               requestId: newRequest.id,
               subject: 'New broadcast interpreting request',
-              body: `Languages: ${newRequest.source_language} → ${newRequest.target_language}\nDomain: ${newRequest.domain}\nCity: ${newRequest.city}\nTime: ${newRequest.scheduled_for.toISOString()}`
+              body: `Languages: ${newRequest.source_language} → ${newRequest.target_language}\nDomain: ${newRequest.domain}\n${newRequest.onsite_required ? `City: ${newRequest.city}` : 'Remote interpreting'}\nTime: ${newRequest.scheduled_for.toISOString()}`
             }
           }
         ];
@@ -217,24 +220,28 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
   app.post('/requests/:id/quotes/:quoteId/accept', { preHandler: app.authorize(['CLIENT']) }, async (request, reply) => {
     const parsed = z.object({ id: z.string().cuid(), quoteId: z.string().cuid() }).safeParse(request.params);
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
+    const body = z.object({ expectedAmountAed: z.number().positive().optional() }).safeParse(request.body ?? {});
+    if (!body.success) return reply.status(400).send({ message: 'Invalid quote confirmation' });
 
     const reqRow = await prisma.request.findFirst({ where: { id: parsed.data.id, client_user_id: request.user.sub } });
     if (!reqRow) return reply.status(404).send({ message: 'Request not found' });
 
     const quoteId = parsed.data.quoteId;
     const result = await prisma.$transaction(async (db) => {
+      // Serialize confirmation with edits to the quoted amount.
+      const open = await db.request.updateMany({ where: { id: reqRow.id, status: 'OPEN' }, data: { status: 'OPEN' } });
       const selected = await db.quote.findFirst({ where: { id: quoteId, request_id: reqRow.id } });
       if (!selected) return 'missing';
 
-      const filled = await db.request.updateMany({
-        where: { id: reqRow.id, status: 'OPEN' },
-        data: { status: 'FILLED', filled_quote_id: quoteId }
-      });
-      if (filled.count === 0) {
+      if (open.count === 0) {
         const current = await db.request.findUniqueOrThrow({ where: { id: reqRow.id } });
         return current.status === 'FILLED' && current.filled_quote_id === quoteId ? 'accepted' : 'closed';
       }
+      if (body.data.expectedAmountAed !== undefined && !selected.amount_aed.equals(body.data.expectedAmountAed)) {
+        return 'changed';
+      }
 
+      await db.request.update({ where: { id: reqRow.id }, data: { status: 'FILLED', filled_quote_id: quoteId } });
       await db.quote.update({ where: { id: quoteId }, data: { status: 'ACCEPTED' } });
       await db.quote.updateMany({ where: { request_id: reqRow.id, id: { not: quoteId } }, data: { status: 'REJECTED' } });
 
@@ -254,6 +261,7 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
     });
 
     if (result === 'missing') return reply.status(404).send({ message: 'Quote not found' });
+    if (result === 'changed') return reply.status(409).send({ message: 'The quote price changed. Review the latest quote before accepting.' });
     if (result === 'closed') return reply.status(409).send({ message: 'This request is no longer open' });
     return { message: 'Quote accepted and request filled', requestId: reqRow.id, acceptedQuoteId: quoteId };
   });

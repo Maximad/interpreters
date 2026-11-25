@@ -1,18 +1,22 @@
 'use client';
 
 import { useLocale, useTranslations } from 'next-intl';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { RequestDetails } from '../../../../components/request-details';
 import { Button } from '../../../../components/ui/button';
 import { Link } from '../../../../i18n/navigation';
-import { errorMessage, requestJson } from '../../../../lib/api';
-import { formatRequestTime, type BookingRequest } from '../../../../lib/booking';
+import { ApiError, errorMessage, requestJson } from '../../../../lib/api';
+import type { BookingRequest, Quote } from '../../../../lib/booking';
 
 export default function ClientDashboardPage() {
   const t = useTranslations('requestFlow');
   const locale = useLocale();
   const [requests, setRequests] = useState<BookingRequest[] | null>(null);
+  const [reviewId, setReviewId] = useState<string | null>(null);
+  const [acceptedId, setAcceptedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const cancelButton = useRef<HTMLButtonElement>(null);
   const currency = new Intl.NumberFormat(locale, { style: 'currency', currency: 'AED' });
 
   const load = useCallback(() => requestJson<BookingRequest[]>('/dashboard/client/requests', { authenticated: true })
@@ -20,49 +24,87 @@ export default function ClientDashboardPage() {
     .catch((reason: unknown) => setError(errorMessage(reason, t('loadError')))), [t]);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => { if (reviewId) cancelButton.current?.focus(); }, [reviewId]);
 
-  async function accept(requestId: string, quoteId: string) {
+  async function accept(requestId: string, quote: Quote) {
+    if (busy) return;
     setBusy(true);
     setError('');
     try {
-      await requestJson(`/requests/${requestId}/quotes/${quoteId}/accept`, { method: 'POST', authenticated: true });
+      await requestJson(`/requests/${requestId}/quotes/${quote.id}/accept`, {
+        method: 'POST',
+        authenticated: true,
+        body: JSON.stringify({ expectedAmountAed: Number(quote.amount_aed) })
+      });
+      setReviewId(null);
+      setAcceptedId(requestId);
       await load();
     } catch (reason) {
-      setError(errorMessage(reason, t('quoteError')));
+      if (reason instanceof ApiError && reason.status === 409) {
+        setReviewId(null);
+        await load();
+        setError(t('quoteReviewRequired'));
+      } else {
+        setError(errorMessage(reason, t('quoteError')));
+      }
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <section className="space-y-4">
-      <header className="flex flex-wrap items-center gap-4">
+    <section className="mx-auto max-w-3xl space-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         <h1 className="text-2xl font-semibold">{t('clientDashboard')}</h1>
-        <Link className="text-blue-700 underline" href="/client/broadcast">{t('broadcastAction')}</Link>
-        <Button onClick={load} type="button" disabled={busy}>{t('refresh')}</Button>
+        <Button className="border border-slate-300 bg-white text-slate-800 hover:bg-slate-100" onClick={load} type="button" disabled={busy}>{t('refresh')}</Button>
       </header>
-      {error && <p className="text-sm text-red-700" role="alert">{error}</p>}
-      {requests === null && !error && <p>{t('loading')}</p>}
+      <Link className="inline-flex min-h-11 items-center rounded-md bg-slate-900 px-4 text-sm font-medium text-white" href="/client/broadcast">{t('newRequest')}</Link>
+      {error && <p className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900" role="alert">{error}</p>}
+      {requests === null && !error && <p role="status">{t('loading')}</p>}
       {requests?.length === 0 && <p>{t('noRequests')}</p>}
-      {requests?.map((item) => (
-        <article className="space-y-3 rounded-lg border bg-white p-5" key={item.id}>
-          <h2 className="font-semibold" dir="ltr">{item.source_language} → {item.target_language}</h2>
-          <p className="text-sm text-slate-600">
-            {item.domain} · {item.onsite_required ? item.city : t('remote')} · {formatRequestTime(item.scheduled_for, locale)} · {t(`requestStatus.${item.status}`)}
-          </p>
-          {item.notes && <p>{item.notes}</p>}
-          {item.quotes.length === 0 && <p>{t('noQuotes')}</p>}
-          {item.quotes.map((quote) => (
-            <div className="space-y-2 border-t pt-3" key={quote.id}>
-              <p className="font-medium">{quote.interpreter_profile?.user.full_name} · {currency.format(Number(quote.amount_aed))} · {t(`quoteStatus.${quote.status}`)}</p>
-              {quote.message && <p>{quote.message}</p>}
-              {item.status === 'OPEN' && quote.status === 'PENDING' && (
-                <Button disabled={busy} onClick={() => accept(item.id, quote.id)} type="button">{t('acceptQuote')}</Button>
-              )}
-            </div>
-          ))}
-        </article>
-      ))}
+      {requests?.map((item) => {
+        const booked = item.quotes.find((quote) => quote.status === 'ACCEPTED');
+        return (
+          <article className="space-y-4 rounded-xl border bg-white p-4 sm:p-5" key={item.id}>
+            <p className={booked ? 'text-sm font-semibold text-emerald-800' : 'text-sm font-medium text-slate-600'} role={acceptedId === item.id ? 'status' : undefined}>
+              {t(booked ? 'bookingConfirmed' : `requestStatus.${item.status}`)}
+            </p>
+            <RequestDetails request={item} />
+            {item.quotes.length === 0 && <p className="text-sm text-slate-700">{t('noQuotes')}</p>}
+            {[...item.quotes].sort((a, b) => Number(b.status === 'ACCEPTED') - Number(a.status === 'ACCEPTED')).map((quote) => {
+              const price = currency.format(Number(quote.amount_aed));
+              return (
+                <div className="space-y-2 break-words border-t pt-3" key={quote.id}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <p className="font-semibold"><bdi>{quote.interpreter_profile?.user.full_name}</bdi></p>
+                    <p className="font-semibold">{price}</p>
+                  </div>
+                  <p className="text-sm text-slate-700">{t(`quoteStatus.${quote.status}`)}</p>
+                  {quote.message && <p className="whitespace-pre-wrap text-sm" dir="auto">{quote.message}</p>}
+                  {item.status === 'OPEN' && quote.status === 'PENDING' && (
+                    reviewId === quote.id ? (
+                      <div className="space-y-3 rounded-md bg-slate-100 p-3">
+                        <p className="text-sm">{t('reviewQuote', { price })}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button className="flex-1 sm:flex-none" disabled={busy} onClick={() => accept(item.id, quote)} type="button">
+                            {t(busy ? 'confirmingQuote' : 'confirmQuote')}
+                          </Button>
+                          <Button className="flex-1 border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 sm:flex-none" ref={cancelButton} disabled={busy} onClick={() => {
+                            setReviewId(null);
+                            requestAnimationFrame(() => document.getElementById(`review-${quote.id}`)?.focus());
+                          }} type="button">{t('backToQuotes')}</Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button className="w-full sm:w-auto" disabled={busy} id={`review-${quote.id}`} onClick={() => setReviewId(quote.id)} type="button">{t('acceptQuote')}</Button>
+                    )
+                  )}
+                </div>
+              );
+            })}
+          </article>
+        );
+      })}
     </section>
   );
 }

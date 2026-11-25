@@ -20,5 +20,7 @@ export type BookingRequest = {
 };
 
 export function formatRequestTime(value: string, locale: string) {
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return new Intl.DateTimeFormat(locale, {
+    year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short'
+  }).format(new Date(value));
 }

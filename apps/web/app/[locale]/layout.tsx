@@ -25,7 +25,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
         <div className={`min-h-screen bg-slate-50 text-slate-900 ${rtl ? 'font-[Tahoma,Arial,sans-serif]' : 'font-[Inter,system-ui,sans-serif]'}`}>
           <header className="border-b bg-white">
             <nav className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3">
-              <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
+              <div className="flex flex-wrap items-center gap-x-4 text-sm font-medium [&>a]:py-1.5">
                 <Link href="/">{t('home')}</Link>
                 <Link href="/search">{t('search')}</Link>
                 <Link href="/auth/login">{t('login')}</Link>
