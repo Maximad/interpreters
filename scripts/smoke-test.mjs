@@ -91,7 +91,8 @@ for (const [path, heading] of [
   ['/ar/auth/verify-email', 'إعادة إرسال رسالة التحقق'],
   ['/en/admin/profiles', 'Interpreter profiles awaiting review'],
   ['/en/interpreter/profile-wizard', 'Interpreter Marketplace'],
-  ['/en/client/dashboard', 'Client dashboard']
+  ['/en/client/broadcast', 'Request an interpreter'],
+  ['/en/client/dashboard', 'Your requests']
 ]) {
   const page = await fetch(`${web}${path}`);
   assert.equal(page.status, 200, path);
