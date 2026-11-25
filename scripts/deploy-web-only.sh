@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
+
+die() {
+  printf 'Web rollout stopped. %s\n' "$*" >&2
+  exit 1
+}
+
 exec 9>/run/lock/interpreters-deploy.lock
-flock -n 9
+flock -n 9 || die 'Another interpreter deployment is running.'
 im_rev=${1:-}
 im_heading=${2:-}
 im_asset=${3:-}
@@ -13,12 +19,21 @@ fi
 im_env=/etc/interpreters/interpreters.env
 im_image="interpreters-web:sha-$im_rev"
 im_registry="ghcr.io/maximad/interpreters/web:sha-$im_rev"
-im_root=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' interpreters-web-1)
-cd "$im_root"
-test -f infra/docker-compose.vps.yml
+im_root=$(docker inspect -f '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' interpreters-web-1) ||
+  die 'Could not inspect the existing interpreter web container.'
+[[ $im_root == /* && -d $im_root ]] || die 'The running web container has no valid Compose working directory.'
+# Compose uses the first configuration file's directory by default.
+if [[ ! -f "$im_root/infra/docker-compose.yml" &&
+      -f "$im_root/docker-compose.yml" && -f "$im_root/docker-compose.vps.yml" ]]; then
+  im_root=$(dirname -- "$im_root")
+fi
+cd -- "$im_root" || die 'The interpreter checkout directory could not be opened.'
+[[ -f infra/docker-compose.yml && -f infra/docker-compose.vps.yml && -f .env.example ]] ||
+  die 'The interpreter Compose files could not be located.'
+[[ -r $im_env ]] || die 'The interpreter environment file could not be read.'
 im_origin=$(sed -n 's/^PUBLIC_BASE_URL=//p' "$im_env")
-[[ $im_origin =~ ^https://[a-zA-Z0-9.-]+$ ]]
-test "$(grep -c '^IMAGE_WEB=' "$im_env")" -eq 1
+[[ $im_origin =~ ^https://[a-zA-Z0-9.-]+$ ]] || die 'The interpreter environment needs a valid HTTPS address.'
+[[ $(grep -c '^IMAGE_WEB=' "$im_env") -eq 1 ]] || die 'The interpreter environment needs exactly one IMAGE_WEB setting.'
 
 if ! docker image inspect "$im_image" >/dev/null 2>&1; then
   if docker pull "$im_registry" &&
@@ -67,7 +82,7 @@ verify_web() {
 }
 
 compose "$im_next" config --quiet
-cmp -s "$im_env" "$im_prev"
+cmp -s "$im_env" "$im_prev" || die 'The interpreter environment changed during preparation.'
 if ! switch_web "$im_next" || ! verify_web; then
   echo 'The new homepage could not be verified. Restoring the previous web image.' >&2
   switch_web "$im_prev"
