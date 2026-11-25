@@ -36,6 +36,12 @@ The shared Caddy proxy terminates TLS and reaches `interpreters-nginx:80` on the
 
 After reloading the gateway, check the home page and `/health` through that origin. The health endpoint checks PostgreSQL and Meilisearch.
 
+## One-time setup from the Hostinger Web console
+
+For a fresh installation, fetch the verified revision into a separate release directory and run `scripts/deploy-web-console.sh HOSTNAME` from the root Web console. It builds the release images, creates a private environment file, and starts the `interpreters` project. After the stack passes its internal health check, the script validates the new site file with the shared Caddy gateway and checks public HTTPS.
+
+The one-time script expects Caddy to import `.caddy` site files from `/etc/caddy/sites` and stops if the hostname matches an existing gateway route. Use the database upgrade instructions when interpreter data or a production environment already exists.
+
 ## Verify and deploy
 
 In GitHub Actions, run **CI, Image Publish and VPS Deploy** with `check-vps` for a read-only report of the interpreter checkout and containers. For a verified `main` deployment, choose `deploy-vps`. The workflow builds and verifies the stack, publishes the three images, and deploys those exact digests.
