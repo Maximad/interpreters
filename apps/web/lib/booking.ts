@@ -6,6 +6,11 @@ export type Quote = {
   interpreter_profile?: { user: { full_name: string } };
 };
 
+export type BookingSession = {
+  details: string | null;
+  completed_at: string | null;
+};
+
 export type BookingRequest = {
   id: string;
   source_language: string;
@@ -17,6 +22,7 @@ export type BookingRequest = {
   notes: string | null;
   status: 'OPEN' | 'FILLED' | 'CLOSED';
   quotes: Quote[];
+  session: BookingSession | null;
 };
 
 export function formatRequestTime(value: string, locale: string) {

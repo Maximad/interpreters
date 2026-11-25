@@ -30,6 +30,44 @@ const quoteSchema = z.object({
   message: z.string().min(3).optional()
 });
 
+const sessionSelect = { details: true, completed_at: true } satisfies Prisma.BookingSessionSelect;
+const sessionParams = z.object({ id: z.string().cuid() });
+const sessionDetails = z.object({ details: z.string().trim().min(1).max(1024) });
+
+function meetingLink(value: string) {
+  if (!URL.canParse(value)) return null;
+  const url = new URL(value);
+  if (url.protocol !== 'https:' || url.username || url.password) return null;
+  return url.href;
+}
+
+async function lockBooking(db: Prisma.TransactionClient, id: string, user: { sub: string; role: string }) {
+  const booking = await db.request.findUnique({
+    where: { id },
+    select: { status: true, client_user_id: true, filled_quote_id: true, onsite_required: true, scheduled_for: true }
+  });
+  if (!booking || booking.status !== 'FILLED' || !booking.filled_quote_id) return null;
+
+  if (user.role === 'CLIENT') {
+    if (booking.client_user_id !== user.sub) return null;
+  } else if (user.role === 'INTERPRETER') {
+    const accepted = await db.quote.findFirst({
+      where: { id: booking.filled_quote_id, request_id: id, status: 'ACCEPTED', interpreter_profile: { user_id: user.sub } },
+      select: { id: true }
+    });
+    if (!accepted) return null;
+  } else {
+    return null;
+  }
+
+  // Serialize edits and completion even when an older booking has no session row yet.
+  const locked = await db.request.updateMany({
+    where: { id, status: 'FILLED', filled_quote_id: booking.filled_quote_id },
+    data: { status: 'FILLED' }
+  });
+  return locked.count === 1 ? booking : null;
+}
+
 const recipientCapDefault = Number(process.env.BROADCAST_RECIPIENT_CAP || 50);
 const dailyRequestLimit = Number(process.env.DAILY_BROADCAST_LIMIT || 20);
 
@@ -266,25 +304,84 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
     return { message: 'Quote accepted and request filled', requestId: reqRow.id, acceptedQuoteId: quoteId };
   });
 
-  app.get('/dashboard/client/requests', { preHandler: app.authorize(['CLIENT']) }, async (request) => {
+  app.put('/requests/:id/session', { preHandler: app.authorize(['CLIENT']) }, async (request, reply) => {
+    const params = sessionParams.safeParse(request.params);
+    const body = sessionDetails.safeParse(request.body);
+    if (!params.success || !body.success) return reply.status(400).send({ message: 'Enter valid meeting details' });
+
+    const id = params.data.id;
+    const result = await prisma.$transaction(async (db) => {
+      const booking = await lockBooking(db, id, request.user);
+      if (!booking) return 'missing';
+      const details = booking.onsite_required ? body.data.details : meetingLink(body.data.details);
+      if (!details || details.length > 1024) return 'invalid';
+
+      const session = await db.bookingSession.findUnique({ where: { request_id: id }, select: sessionSelect });
+      if (session?.completed_at) return 'completed';
+      return db.bookingSession.upsert({
+        where: { request_id: id },
+        create: { request_id: id, details },
+        update: { details },
+        select: sessionSelect
+      });
+    });
+    if (result === 'missing') return reply.status(404).send({ message: 'Booking not found' });
+    if (result === 'invalid') return reply.status(400).send({ message: 'Enter an HTTPS meeting link' });
+    if (result === 'completed') return reply.status(409).send({ message: 'This session is already complete' });
+    return reply.header('Cache-Control', 'private, no-store').send(result);
+  });
+
+  app.post('/requests/:id/session/complete', { preHandler: app.authorize(['CLIENT', 'INTERPRETER']) }, async (request, reply) => {
+    const params = sessionParams.safeParse(request.params);
+    if (!params.success) return reply.status(400).send({ message: 'Invalid booking' });
+
+    const id = params.data.id;
+    const result = await prisma.$transaction(async (db) => {
+      const booking = await lockBooking(db, id, request.user);
+      if (!booking) return 'missing';
+      const session = await db.bookingSession.findUnique({ where: { request_id: id }, select: sessionSelect });
+      if (session?.completed_at) return session;
+
+      const completed_at = new Date();
+      if (booking.scheduled_for > completed_at) return 'early';
+      return db.bookingSession.upsert({
+        where: { request_id: id },
+        create: { request_id: id, completed_at },
+        update: { completed_at },
+        select: sessionSelect
+      });
+    });
+    if (result === 'missing') return reply.status(404).send({ message: 'Booking not found' });
+    if (result === 'early') return reply.status(409).send({ message: 'You can mark the session complete after its scheduled start' });
+    return reply.header('Cache-Control', 'private, no-store').send(result);
+  });
+
+  app.get('/dashboard/client/requests', { preHandler: app.authorize(['CLIENT']) }, async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
     return prisma.request.findMany({
       where: { client_user_id: request.user.sub },
       include: {
         quotes: { include: { interpreter_profile: { select: { user: { select: { full_name: true } } } } } },
-        recipients: true
+        recipients: true,
+        session: { select: sessionSelect }
       },
       orderBy: { created_at: 'desc' }
     });
   });
 
-  app.get('/dashboard/interpreter/requests', { preHandler: app.authorize(['INTERPRETER']) }, async (request) => {
+  app.get('/dashboard/interpreter/requests', { preHandler: app.authorize(['INTERPRETER']) }, async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store');
     const profile = await prisma.interpreterProfile.findUnique({ where: { user_id: request.user.sub } });
     if (!profile) return [];
 
-    return prisma.requestRecipient.findMany({
+    const invitations = await prisma.requestRecipient.findMany({
       where: { interpreter_profile_id: profile.id },
-      include: { request: { include: { quotes: { where: { interpreter_profile_id: profile.id } } } } },
+      include: { request: { include: { quotes: { where: { interpreter_profile_id: profile.id } }, session: { select: sessionSelect } } } },
       orderBy: { sent_at: 'desc' }
+    });
+    return invitations.map(({ request, ...invitation }) => {
+      const accepted = request.quotes.some((quote) => quote.status === 'ACCEPTED' && quote.id === request.filled_quote_id);
+      return { ...invitation, request: { ...request, session: accepted ? request.session : null } };
     });
   });
 };

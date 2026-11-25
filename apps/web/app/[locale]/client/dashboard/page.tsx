@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { BookingSessionPanel } from '../../../../components/booking-session-panel';
 import { RequestDetails } from '../../../../components/request-details';
 import { Button } from '../../../../components/ui/button';
 import { Link } from '../../../../i18n/navigation';
@@ -63,7 +64,7 @@ export default function ClientDashboardPage() {
       {requests === null && !error && <p role="status">{t('loading')}</p>}
       {requests?.length === 0 && <p>{t('noRequests')}</p>}
       {requests?.map((item) => {
-        const booked = item.quotes.find((quote) => quote.status === 'ACCEPTED');
+        const booked = item.status === 'FILLED' && item.quotes.some((quote) => quote.status === 'ACCEPTED');
         return (
           <article className="space-y-4 rounded-xl border bg-white p-4 sm:p-5" key={item.id}>
             <p className={booked ? 'text-sm font-semibold text-emerald-800' : 'text-sm font-medium text-slate-600'} role={acceptedId === item.id ? 'status' : undefined}>
@@ -102,6 +103,11 @@ export default function ClientDashboardPage() {
                 </div>
               );
             })}
+            {booked && (
+              <BookingSessionPanel request={item} canEdit onChange={(session) => {
+                setRequests((current) => current?.map((request) => request.id === item.id ? { ...request, session } : request) ?? null);
+              }} />
+            )}
           </article>
         );
       })}

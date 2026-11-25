@@ -158,6 +158,9 @@ const result = await api('/requests/broadcast', {
 });
 assert.equal(result.matchedCount, 2);
 const id = result.request.id;
+const sessionPath = `/requests/${id}/session`;
+const meetingLink = 'https://meet.example.test/private-session';
+await api(sessionPath, { method: 'PUT', token: clientToken, payload: { details: meetingLink }, expected: 404 });
 const invitations = await api('/dashboard/interpreter/requests', { token: first.token });
 assert.ok(invitations.some(({ request }) => request.id === id));
 const excluded = await api('/dashboard/interpreter/requests', { token: reversed.token });
@@ -187,4 +190,40 @@ assert.equal(filled.filled_quote_id, accepted.acceptedQuoteId);
 await api(`${quotePath}/${accepted.acceptedQuoteId}/accept`, { method: 'POST', token: clientToken });
 await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 300 }, expected: 409 });
 
-console.log('Verified gateway, email delivery and resend, profile review, exact matching, and concurrent quote acceptance.');
+const [booked, declined] = accepted.acceptedQuoteId === firstQuote.id ? [first, second] : [second, first];
+await api(sessionPath, { method: 'PUT', token: clientToken, payload: { details: 'http://meet.example.test/' }, expected: 400 });
+const saved = await api(sessionPath, { method: 'PUT', token: clientToken, payload: { details: meetingLink } });
+assert.deepEqual(saved, { details: meetingLink, completed_at: null });
+const readSession = async (token) => {
+  const rows = await api('/dashboard/interpreter/requests', { token });
+  return rows.find(({ request }) => request.id === id).request.session;
+};
+assert.deepEqual(await readSession(booked.token), saved);
+assert.equal(await readSession(declined.token), null);
+const clientRequests = await api('/dashboard/client/requests', { token: clientToken });
+assert.deepEqual(clientRequests.find((request) => request.id === id).session, saved);
+await api(sessionPath, { method: 'PUT', token: booked.token, payload: { details: meetingLink }, expected: 403 });
+await api(`${sessionPath}/complete`, { method: 'POST', token: declined.token, expected: 404 });
+await api(`${sessionPath}/complete`, { method: 'POST', token: booked.token, expected: 409 });
+
+localSql(`UPDATE "Request" SET scheduled_for = NOW() - INTERVAL '2 hours' WHERE id = '${id}';`);
+const [clientComplete, interpreterComplete] = await Promise.all([clientToken, booked.token].map((token) =>
+  api(`${sessionPath}/complete`, { method: 'POST', token })));
+assert.ok(clientComplete.completed_at);
+assert.equal(clientComplete.details, meetingLink);
+assert.deepEqual(interpreterComplete, clientComplete);
+assert.deepEqual(await readSession(booked.token), clientComplete);
+await api(sessionPath, { method: 'PUT', token: clientToken, payload: { details: meetingLink }, expected: 409 });
+
+const onsite = await api('/requests/broadcast', {
+  method: 'POST', token: clientToken,
+  payload: { ...requestDetails, city: dubai.name, onsiteRequired: true, remoteAllowed: false }
+});
+const onsitePath = `/requests/${onsite.request.id}`;
+const onsiteQuote = await api(`${onsitePath}/quotes`, { method: 'POST', token: first.token, payload: { amountAed: 250 } });
+await api(`${onsitePath}/quotes/${onsiteQuote.id}/accept`, { method: 'POST', token: clientToken });
+const address = 'Conference Centre, Level 2';
+const onsiteSession = await api(`${onsitePath}/session`, { method: 'PUT', token: clientToken, payload: { details: address } });
+assert.equal(onsiteSession.details, address);
+
+console.log('Verified signup, profile review, exact matching, quote acceptance, private meeting details and completion.');

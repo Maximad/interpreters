@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
+import { BookingSessionPanel } from '../../../../components/booking-session-panel';
 import { RequestDetails } from '../../../../components/request-details';
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
@@ -77,6 +78,11 @@ export default function InterpreterDashboardPage() {
               <p className="border-t pt-3 font-medium">
                 {currency.format(Number(quote.amount_aed))} · {t(`quoteStatus.${quote.status}`)}
               </p>
+            )}
+            {request.status === 'FILLED' && quote?.status === 'ACCEPTED' && (
+              <BookingSessionPanel request={request} onChange={(session) => {
+                setInvitations((current) => current?.map((item) => item.id === id ? { ...item, request: { ...item.request, session } } : item) ?? null);
+              }} />
             )}
             {quoteFeedback?.id === request.id && (
               <p className={quoteFeedback.failed ? 'text-sm text-red-800' : 'text-sm text-emerald-800'} role={quoteFeedback.failed ? 'alert' : 'status'}>

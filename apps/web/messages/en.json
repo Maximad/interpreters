@@ -160,5 +160,27 @@
     "reject": "Request changes",
     "reason": "Changes needed",
     "error": "Could not complete the profile review."
+  },
+  "bookingSession": {
+    "title": "Meeting details",
+    "location": "Meeting address",
+    "meetingLink": "Meeting link",
+    "sharing": "Shared with you and the interpreter you booked.",
+    "saveDetails": "Save details",
+    "editDetails": "Edit details",
+    "detailsSaved": "Meeting details saved.",
+    "openLink": "Open meeting link",
+    "noDetails": "No meeting details were added.",
+    "waitingForDetails": "The client will add the meeting details here.",
+    "back": "Back",
+    "markComplete": "Mark session complete",
+    "confirmPrompt": "Has the session ended?",
+    "confirmCompletion": "Confirm completion",
+    "completedAt": "Session completed on {time}",
+    "alreadyCompleted": "This session is already complete. Refresh to see its status.",
+    "completionTooEarly": "You can mark the session complete after its scheduled start.",
+    "locationError": "Enter the meeting address.",
+    "linkError": "Enter a meeting link that starts with https://.",
+    "saveError": "Could not update this session. Try again."
   }
 }

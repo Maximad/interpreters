@@ -182,6 +182,14 @@ model Request {
   client             User               @relation(fields: [client_user_id], references: [id])
   recipients         RequestRecipient[]
   quotes             Quote[]
+  session            BookingSession?
+}
+
+model BookingSession {
+  request_id   String    @id
+  details      String?
+  completed_at DateTime?
+  request      Request   @relation(fields: [request_id], references: [id], onDelete: Cascade)
 }
 
 model RequestRecipient {
