@@ -32,7 +32,8 @@ done
 
 # Verify reads as the same unprivileged user used by the migration.
 docker run --rm --entrypoint sh "interpreters-api:sha-$revision" -ec '
-  test -r package.json && test -r prisma/schema.prisma && test -r dist/prisma/seed.js
+  npm pkg get name >/dev/null &&
+    test -r prisma/schema.prisma && test -r dist/prisma/seed.js
 ' || die 'The candidate API image cannot read its migration files.'
 
 mkdir -p /var/backups/interpreters

@@ -1,8 +1,8 @@
 FROM node:22-bookworm AS base
 WORKDIR /app
-COPY package.json package-lock.json ./
-COPY --chown=node:node apps/api/package.json ./apps/api/package.json
-COPY apps/web/package.json ./apps/web/package.json
+COPY --chmod=0644 package.json package-lock.json ./
+COPY --chmod=0644 apps/api/package.json ./apps/api/package.json
+COPY --chmod=0644 apps/web/package.json ./apps/web/package.json
 
 FROM base AS build
 RUN npm ci --workspace @im/api
