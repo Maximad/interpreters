@@ -1,5 +1,6 @@
 import { PrismaClient, ProfileStatus } from '@prisma/client';
 import { MeiliSearch } from 'meilisearch';
+import { languageDirection, parseLanguagePair } from './language-pair';
 
 export type InterpreterSearchDoc = {
   id: string;
@@ -7,6 +8,7 @@ export type InterpreterSearchDoc = {
   headline: string | null;
   bio: string | null;
   languages: string[];
+  language_pairs: string[];
   domains: string[];
   cities: string[];
   onsite_enabled: boolean;
@@ -31,7 +33,7 @@ function toDoc(profile: {
   status: ProfileStatus;
   updated_at: Date;
   user: { full_name: string; is_email_verified: boolean };
-  languages: Array<{ language: { name: string } }>;
+  languages: Array<{ language: { name: string }; direction: string }>;
   domains: Array<{ domain: { name: string } }>;
   cities: Array<{ city: { name: string } }>;
 }): InterpreterSearchDoc {
@@ -40,7 +42,13 @@ function toDoc(profile: {
     full_name: profile.user.full_name,
     headline: profile.headline,
     bio: profile.bio,
-    languages: profile.languages.map((item) => item.language.name),
+    languages: [...new Set(profile.languages.flatMap((item) => [
+      item.language.name, ...(languageDirection(item.direction) ?? [])
+    ]))],
+    language_pairs: Array.from(new Set(profile.languages.flatMap((item) => {
+      const pair = parseLanguagePair(item.direction);
+      return pair ? [pair] : [];
+    }))),
     domains: profile.domains.map((item) => item.domain.name),
     cities: profile.cities.map((item) => item.city.name),
     onsite_enabled: profile.onsite_enabled,
@@ -102,10 +110,11 @@ export async function syncApprovedInterpreterProfiles(prisma: PrismaClient, meil
     console.error(`[search-sync] Failed to fetch indexed ids for ${indexName}; skipping stale deletions`, error);
   }
 
-  const addTask = await index.addDocuments(docs, { primaryKey: 'id' });
-  console.info(`[search-sync] addDocuments enqueued for ${indexName} with task ${addTask.taskUid}; upserts=${docs.length}`);
-  await meiliClient.waitForTask(addTask.taskUid);
-  console.info(`[search-sync] addDocuments completed for ${indexName}; upserts=${docs.length}`);
+  if (docs.length > 0) {
+    const addTask = await index.addDocuments(docs, { primaryKey: 'id' });
+    const result = await meiliClient.waitForTask(addTask.taskUid);
+    if (result.status !== 'succeeded') throw new Error('Interpreter indexing failed');
+  }
   console.info(`[search-sync] Full sync completed for ${indexName}; stale deletions=${staleIds.length}; upserts=${docs.length}`);
 }
 
@@ -125,10 +134,10 @@ export async function upsertInterpreterProfileToIndex(
     }
   });
 
-  if (!profile || profile.status !== 'APPROVED') {
-    await meiliClient.index(indexName).deleteDocument(profileId);
-    return;
-  }
-
-  await meiliClient.index(indexName).addDocuments([toDoc(profile)], { primaryKey: 'id' });
+  const index = meiliClient.index(indexName);
+  const task = !profile || profile.status !== 'APPROVED'
+    ? await index.deleteDocument(profileId)
+    : await index.addDocuments([toDoc(profile)], { primaryKey: 'id' });
+  const result = await meiliClient.waitForTask(task.taskUid);
+  if (result.status !== 'succeeded') throw new Error('Interpreter indexing failed');
 }

@@ -7,6 +7,7 @@ import meilisearchPlugin from './plugins/meilisearch';
 import { prisma } from './plugins/prisma';
 import { healthRoute } from './routes/health';
 import { authRoutes } from './routes/auth';
+import { googleAuthRoutes } from './routes/google-auth';
 import { profileRoutes } from './routes/profile';
 import { searchRoutes } from './routes/search';
 import { syncApprovedInterpreterProfiles } from './utils/search-index';
@@ -14,6 +15,7 @@ import { inquiryRoutes } from './routes/inquiries';
 import { notificationRoutes } from './routes/notifications';
 import { requestRoutes } from './routes/requests';
 import { isCorsOriginAllowed, parseCorsOrigins } from './utils/cors';
+import { publicOrigin } from './utils/email';
 
 dotenv.config();
 
@@ -22,6 +24,8 @@ export function buildApp() {
 
   const isProduction = process.env.NODE_ENV === 'production';
   const allowedOrigins = new Set(parseCorsOrigins(process.env.CORS_ORIGINS));
+  const origin = publicOrigin();
+  if (origin) allowedOrigins.add(origin);
   const jwtSecret = process.env.JWT_SECRET;
   const jwtExpiresIn = process.env.JWT_EXPIRES_IN || '1h';
 
@@ -52,6 +56,7 @@ export function buildApp() {
 
   app.register(healthRoute);
   app.register(authRoutes, { prefix: '/api' });
+  app.register(googleAuthRoutes, { prefix: '/api' });
   app.register(profileRoutes, { prefix: '/api' });
   app.register(searchRoutes, { prefix: '/api' });
   app.register(inquiryRoutes, { prefix: '/api' });

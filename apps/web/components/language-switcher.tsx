@@ -26,7 +26,6 @@ export function LanguageSwitcher() {
   const pathname = usePathname();
 
   function changeLocale(nextLocale: Locale) {
-    document.cookie = `NEXT_LOCALE=${nextLocale}; path=/; max-age=${60 * 60 * 24 * 365}`;
     router.replace(pathname, { locale: nextLocale });
   }
 

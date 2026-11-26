@@ -4,15 +4,18 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
+import { GoogleSignIn } from '../../../../components/google-sign-in';
 import { Button } from '../../../../components/ui/button';
 import { useToast } from '../../../../components/providers/toast-provider';
-
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+import { Link, useRouter } from '../../../../i18n/navigation';
+import { dashboardPath, setSessionToken } from '../../../../lib/auth-session';
+import { errorMessage, requestJson } from '../../../../lib/api';
 
 export default function LoginPage() {
   const t = useTranslations('auth');
   const [error, setError] = useState('');
   const { showToast } = useToast();
+  const router = useRouter();
 
   async function handleSubmit(formData: FormData) {
     const payload = {
@@ -21,22 +24,19 @@ export default function LoginPage() {
     };
 
     setError('');
-    const response = await fetch(`${apiBase}/auth/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      const message = data.message || t('loginError');
+    try {
+      const data = await requestJson<{ token: string; user: { role: 'CLIENT' | 'INTERPRETER' | 'ADMIN' } }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      setSessionToken(data.token);
+      showToast({ title: t('successTitle'), description: t('loginSuccess') });
+      router.push(dashboardPath[data.user.role]);
+    } catch (error) {
+      const message = errorMessage(error, t('loginError'));
       setError(message);
       showToast({ title: t('errorTitle'), description: message, tone: 'error' });
-      return;
     }
-
-    localStorage.setItem('im_token', data.token);
-    showToast({ title: t('successTitle'), description: t('loginSuccess') });
   }
 
   return (
@@ -54,6 +54,8 @@ export default function LoginPage() {
         {error ? <p className="text-sm text-red-600" role="alert">{error}</p> : null}
         <Button className="w-full" type="submit">{t('login')}</Button>
       </form>
+      <GoogleSignIn mode="login" />
+      <Link className="mt-4 inline-block text-sm text-blue-700" href="/auth/verify-email">{t('verifyEmail')}</Link>
     </section>
   );
 }

@@ -10,6 +10,7 @@ import {
 const querySchema = z.object({
   q: z.string().optional(),
   languages: z.string().optional(),
+  language: z.string().trim().min(1).max(200).optional(),
   domains: z.string().optional(),
   cities: z.string().optional(),
   onsite: z.enum(['true', 'false']).optional(),
@@ -34,6 +35,7 @@ export function buildFilters(parsed: z.infer<typeof querySchema>) {
   const filters: string[] = [];
 
   const languages = parseList(parsed.languages);
+  if (parsed.language) languages.push(parsed.language);
   const domains = parseList(parsed.domains);
   const cities = parseList(parsed.cities);
 

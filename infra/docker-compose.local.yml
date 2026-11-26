@@ -1,0 +1,39 @@
+services:
+  nginx:
+    image: interpreters-nginx:local
+    container_name: interpreters-local-nginx
+    build:
+      context: ..
+      dockerfile: infra/nginx.Dockerfile
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-8080}:80"
+
+  web:
+    image: interpreters-web:local
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+
+  api:
+    image: interpreters-api:local
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    environment:
+      CORS_ORIGINS: "http://localhost:${HTTP_PORT:-8080},http://127.0.0.1:${HTTP_PORT:-8080}"
+      PUBLIC_BASE_URL: "http://localhost:${HTTP_PORT:-8080}"
+      SMTP_URL: smtp://mailpit:1025
+      SMTP_FROM: no-reply@interpreters.test
+
+  migrate:
+    image: interpreters-api:local
+    pull_policy: never
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+
+networks:
+  proxy:
+    external: false

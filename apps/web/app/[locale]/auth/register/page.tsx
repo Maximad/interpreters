@@ -1,56 +1,114 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { GoogleSignIn } from '../../../../components/google-sign-in';
+import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
-import { Button } from '../../../../components/ui/button';
+import { Select } from '../../../../components/ui/select';
 import { useToast } from '../../../../components/providers/toast-provider';
+import { Link, useRouter } from '../../../../i18n/navigation';
+import { ApiError, errorMessage, requestJson } from '../../../../lib/api';
 
-const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+const fields = [
+  { name: 'fullName', type: 'text', autoComplete: 'name', minLength: 2 },
+  { name: 'email', type: 'email', autoComplete: 'email' },
+  { name: 'password', type: 'password', autoComplete: 'new-password', minLength: 8 }
+] as const;
+
+type Field = (typeof fields)[number]['name'];
+type FormError = { message: string; field?: Field };
 
 export default function RegisterPage() {
   const t = useTranslations('auth');
   const { showToast } = useToast();
+  const router = useRouter();
+  const [role, setRole] = useState<'CLIENT' | 'INTERPRETER'>('CLIENT');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<FormError | null>(null);
+  const errorSummary = useRef<HTMLDivElement>(null);
 
-  async function handleSubmit(formData: FormData) {
+  useEffect(() => { if (error) errorSummary.current?.focus(); }, [error]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const value = (name: string) => String(formData.get(name) ?? '');
     const payload = {
-      fullName: String(formData.get('fullName') || ''),
-      email: String(formData.get('email') || ''),
-      password: String(formData.get('password') || ''),
-      role: String(formData.get('role') || 'CLIENT')
+      fullName: value('fullName').trim(),
+      email: value('email').trim(),
+      password: value('password'),
+      role: value('role') || 'CLIENT'
     };
 
-    const response = await fetch(`${apiBase}/auth/signup`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      showToast({ title: t('errorTitle'), description: data.message || t('registerError'), tone: 'error' });
+    if (payload.fullName.length < 2) {
+      setError({ field: 'fullName', message: t('nameRequired') });
+      return;
+    }
+    const emailInput = form.elements.namedItem('email');
+    if (!payload.email || (emailInput instanceof HTMLInputElement && emailInput.validity.typeMismatch)) {
+      setError({ field: 'email', message: t('emailRequired') });
+      return;
+    }
+    if (payload.password.length < 8) {
+      setError({ field: 'password', message: t('passwordRule') });
       return;
     }
 
-    showToast({ title: t('successTitle'), description: t('registerSuccess') });
+    setError(null);
+    setBusy(true);
+    try {
+      await requestJson('/auth/signup', { method: 'POST', body: JSON.stringify(payload) });
+      showToast({ title: t('successTitle'), description: t('registerSuccess') });
+      router.push('/auth/verify-email');
+    } catch (reason) {
+      const status = reason instanceof ApiError ? reason.status : undefined;
+      const fallback = status === 400 ? t('checkSignupFields') : t('registerError');
+      setError({ message: errorMessage(reason, fallback) });
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
-    <section className="mx-auto max-w-md rounded-lg border bg-white p-6 shadow-sm">
-      <h1 className="mb-4 text-2xl font-semibold">{t('register')}</h1>
-      <form action={handleSubmit} className="space-y-4">
-        <div><Label htmlFor="fullName">{t('fullName')}</Label><Input id="fullName" name="fullName" required /></div>
-        <div><Label htmlFor="email">{t('email')}</Label><Input id="email" name="email" required type="email" /></div>
-        <div><Label htmlFor="password">{t('password')}</Label><Input id="password" name="password" required type="password" /></div>
-        <div>
+    <section className="mx-auto max-w-md space-y-4 rounded-2xl border border-line bg-white p-4 sm:p-6">
+      <h1 className="text-2xl font-semibold">{t('register')}</h1>
+      {error && (
+        <div id="register-error" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900"
+          ref={errorSummary} role="alert" tabIndex={-1}>
+          {error.field ? <a className="block min-h-6 underline" href={`#${error.field}`}>{error.message}</a> : <p>{error.message}</p>}
+        </div>
+      )}
+      <form noValidate onSubmit={handleSubmit} aria-busy={busy} className="space-y-4">
+        {fields.map(({ name, ...properties }) => {
+          const description = [
+            name === 'password' && 'register-password-rule',
+            error?.field === name && 'register-error'
+          ].filter(Boolean).join(' ');
+          return (
+            <div className="grid gap-1.5" key={name}>
+              <Label htmlFor={name}>{t(name)}</Label>
+              <Input id={name} name={name} {...properties} required
+                aria-invalid={error?.field === name || undefined}
+                aria-describedby={description || undefined} />
+              {name === 'password' && <p className="text-sm text-quiet" id="register-password-rule">{t('passwordRule')}</p>}
+            </div>
+          );
+        })}
+        <div className="grid gap-1.5">
           <Label htmlFor="role">{t('role')}</Label>
-          <select className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" id="role" name="role">
+          <Select id="role" name="role" value={role} onChange={(event) => setRole(event.target.value === 'INTERPRETER' ? 'INTERPRETER' : 'CLIENT')}>
             <option value="CLIENT">{t('client')}</option>
             <option value="INTERPRETER">{t('interpreter')}</option>
-          </select>
+          </Select>
         </div>
-        <Button className="w-full" type="submit">{t('register')}</Button>
+        <Button className="w-full" type="submit" disabled={busy}>{t(busy ? 'registering' : 'register')}</Button>
       </form>
+      <GoogleSignIn mode="register" role={role} />
+      <Link className="inline-flex min-h-11 items-center text-sm font-semibold text-forest underline underline-offset-4" href="/auth/verify-email">{t('verifyEmail')}</Link>
     </section>
   );
 }

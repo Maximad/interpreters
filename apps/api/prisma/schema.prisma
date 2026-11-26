@@ -53,6 +53,7 @@ model User {
   id                        String                    @id @default(cuid())
   email                     String                    @unique
   password_hash             String
+  google_subject            String?                   @unique
   full_name                 String
   role                      UserRole                  @default(CLIENT)
   is_email_verified         Boolean                   @default(false)
@@ -182,6 +183,14 @@ model Request {
   client             User               @relation(fields: [client_user_id], references: [id])
   recipients         RequestRecipient[]
   quotes             Quote[]
+  session            BookingSession?
+}
+
+model BookingSession {
+  request_id   String    @id
+  details      String?
+  completed_at DateTime?
+  request      Request   @relation(fields: [request_id], references: [id], onDelete: Cascade)
 }
 
 model RequestRecipient {
@@ -204,6 +213,10 @@ model Quote {
   amount_aed             Decimal            @db.Decimal(10, 2)
   status                 QuoteStatus        @default(PENDING)
   message                String?
+  duration_minutes       Int?
+  payment_terms          String?
+  cancellation_terms     String?
+  revision               Int                @default(0)
   created_at             DateTime           @default(now())
   request                Request            @relation(fields: [request_id], references: [id])
   interpreter_profile    InterpreterProfile @relation(fields: [interpreter_profile_id], references: [id])

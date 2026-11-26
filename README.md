@@ -1,89 +1,23 @@
-# interpreters
+# Interpreter Marketplace
 
-TypeScript monorepo for an interpreter marketplace MVP.
+The Next.js web app and Fastify API support interpreter onboarding, profile review, public search, and client requests with quotes. PostgreSQL stores marketplace data and Meilisearch indexes approved profiles.
 
-## Structure
+## Run locally
 
-- `apps/web`: Next.js App Router + Tailwind UI + auth/profile/search + dashboards
-- `apps/api`: Fastify API with Zod validation, Prisma, JWT auth, RBAC, and Meilisearch-backed search
-- `infra/docker-compose.yml`: base services
-- `infra/docker-compose.vps.yml`: optional VPS resource overrides
-- `docs/ops/runbook.md`: deployment + operations runbook
+Use Docker Compose v2 and run `make local` from the repository root. The marketplace is at [localhost:8080](http://localhost:8080) and Mailpit captures its verification and request emails at [localhost:8025](http://localhost:8025). Set `HTTP_PORT` or `MAILPIT_PORT` to change those ports.
 
-## Required environment variables
-
-Copy `.env.example` to `.env` and set real values:
-
-- `DATABASE_URL`
-- `POSTGRES_PASSWORD`
-- `JWT_SECRET`
-- `JWT_EXPIRES_IN` (example: `1h`)
-- `CORS_ORIGINS` (comma-separated production origins)
-- `MEILI_MASTER_KEY`
-- `IMAGE_API`, `IMAGE_WEB`, `IMAGE_NGINX` (public image tags to pull)
-
-Never commit real secrets.
-
-## Local run
-
-```bash
-cd infra
-docker compose up -d
+```sh
+npm ci
+npm run prisma:generate -w @im/api
+npm run lint:ci
+npm test -w @im/api
+node scripts/smoke-test.mjs
 ```
 
-## VPS deploy (single command)
+The smoke test creates synthetic users and requests in the local Compose project. It checks email verification, review, matching, and quote acceptance.
 
-```bash
-cd /opt/interpreters
-make deploy
-```
+## Release and hosting
 
-`make deploy` always uses:
+GitHub Actions verifies the Docker stack and publishes images for `main` and version tags. The same workflow can check the VPS with the existing SSH credentials or deploy a verified `main` revision by image digest.
 
-```bash
-docker compose -f infra/docker-compose.yml -f infra/docker-compose.vps.yml ... (image-based deploy)
-```
-
-The deploy script hard-fails if the VPS override is missing or if the merged config does not include expected proxy aliases.
-
-## Fresh VPS smoke test checklist
-
-1. Clone + env setup:
-   - `git clone <repo-url> /opt/interpreters`
-   - `cp .env.example .env` and fill production values
-2. Deploy:
-   - `cd /opt/interpreters && make deploy`
-3. Service health:
-   - `docker compose -f infra/docker-compose.yml -f infra/docker-compose.vps.yml ps`
-   - `curl -fsS https://<your-domain>/health` (through the gateway proxy)
-4. Minimal journey:
-   - signup user (response must not include verification token)
-   - verify email + login
-   - run search query
-   - load dashboard page through gateway
-
-## Security and production defaults
-
-- Signup endpoint does not return verification tokens; token logging is disabled in production.
-- JWT signing has explicit expiry (`JWT_EXPIRES_IN`) and consistent verification through Fastify JWT middleware.
-- CORS is restricted to `CORS_ORIGINS` in production.
-- Meilisearch filter inputs are escaped using helper functions (no raw user string interpolation).
-
-## Next.js build/deploy mode
-
-Web is deployed as SSR (`next build` + `next start`) in Docker Compose.
-
-- No static export mode is used.
-- Locale layout is marked dynamic to avoid prerender/export failures when request-scoped i18n APIs are used.
-- CI includes a web build step that matches Docker build behavior (`npm run build:web:docker`).
-
-## Ops
-
-See `docs/ops/runbook.md` for:
-
-- deploy / rollback / restart
-- logs and health checks
-- backups
-- disk usage inspection
-- safe cache cleanup vs destructive prune commands
-- gateway (Caddy) wiring and health verification
+Keep production configuration outside the repository. Set `PUBLIC_BASE_URL` to the current HTTPS address and configure `SMTP_URL` and `SMTP_FROM` to enable registration and email notifications. A temporary hostname can be configured through the gateway and environment file without rebuilding the web application. [Operations runbook](docs/ops/runbook.md)

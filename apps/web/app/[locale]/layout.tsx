@@ -1,10 +1,11 @@
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, getTranslations } from 'next-intl/server';
 import type { ReactNode } from 'react';
-import { LanguageSwitcher } from '../../components/language-switcher';
-import { Link } from '../../i18n/navigation';
+import { SiteNav } from '../../components/site-nav';
 import { ToastProvider } from '../../components/providers/toast-provider';
 import { LocaleDocumentSync } from '../../components/providers/locale-document-sync';
+import { Link } from '../../i18n/navigation';
+import { pilotSupportEmail } from '../../lib/pilot';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,30 +13,22 @@ function isRtl(locale: string) {
   return ['ar', 'fa'].includes(locale);
 }
 
-export default async function LocaleLayout({ children, params: { locale } }: { children: ReactNode; params: { locale: string } }) {
-  const messages = await getMessages({ locale });
-  const t = await getTranslations({ locale, namespace: 'nav' });
+export default async function LocaleLayout({ children, params }: { children: ReactNode; params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
+  const [messages, t] = await Promise.all([getMessages({ locale }), getTranslations({ locale, namespace: 'pilot' })]);
   const rtl = isRtl(locale);
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
       <ToastProvider>
         <LocaleDocumentSync locale={locale} rtl={rtl} />
-        <div className={`min-h-screen bg-slate-50 text-slate-900 ${rtl ? 'font-[Tahoma,Arial,sans-serif]' : 'font-[Inter,system-ui,sans-serif]'}`}>
-          <header className="border-b bg-white">
-            <nav className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-3">
-              <div className="flex flex-wrap items-center gap-4 text-sm font-medium">
-                <Link href="/">{t('home')}</Link>
-                <Link href="/search">{t('search')}</Link>
-                <Link href="/auth/login">{t('login')}</Link>
-                <Link href="/auth/register">{t('register')}</Link>
-                <Link href="/interpreter/profile-wizard">{t('profileWizard')}</Link>
-                <Link href="/client/broadcast">{t('broadcast')}</Link>
-              </div>
-              <LanguageSwitcher />
-            </nav>
-          </header>
-          <main className="mx-auto w-full max-w-6xl px-4 py-6">{children}</main>
+        <div dir={rtl ? 'rtl' : 'ltr'} className={`flex min-h-screen flex-col bg-canvas text-ink ${rtl ? 'font-[Tahoma,Arial,sans-serif]' : 'font-[Inter,system-ui,sans-serif]'}`}>
+          <SiteNav />
+          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6">{children}</main>
+          <footer className="mx-auto flex w-full max-w-6xl flex-wrap gap-x-5 border-t border-line px-4 text-sm">
+            <Link className="inline-flex min-h-11 items-center text-forest underline" href="/pilot">{t('policyTitle')}</Link>
+            <a className="inline-flex min-h-11 items-center text-forest underline" href={`mailto:${pilotSupportEmail}`}>{t('contactSupport')}</a>
+          </footer>
         </div>
       </ToastProvider>
     </NextIntlClientProvider>

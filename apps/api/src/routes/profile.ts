@@ -1,7 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { ProfileStatus, UserRole } from '@prisma/client';
 import { z } from 'zod';
+import { languageCatalog, withLanguageLabel } from '../../prisma/seeds/language-catalog';
 import { prisma } from '../plugins/prisma';
+import { languageDirection } from '../utils/language-pair';
 import { upsertInterpreterProfileToIndex } from '../utils/search-index';
 
 const basicsSchema = z.object({
@@ -109,15 +111,51 @@ async function ensureInterpreter(userId: string) {
   return user?.role === UserRole.INTERPRETER;
 }
 
+function savedLanguageOptions(rows: { language_id: number; direction: string }[]) {
+  if (rows.length === 0) return [];
+  const ids = [...new Set(rows.map(({ language_id }) => language_id))];
+  const names = [...new Set(rows.flatMap(({ direction }) => languageDirection(direction) ?? []))];
+  return prisma.language.findMany({
+    where: { OR: [{ id: { in: ids } }, { name: { in: names, mode: 'insensitive' } }] },
+    orderBy: { name: 'asc' }
+  });
+}
+
 export const profileRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/profile/options', async () => {
+    const orderBy = { name: 'asc' } as const;
+    const [languages, domains, cities, publishedDirections] = await Promise.all([
+      prisma.language.findMany({ where: { name: { in: languageCatalog } }, orderBy }),
+      prisma.domain.findMany({ orderBy }),
+      prisma.city.findMany({ orderBy }),
+      prisma.interpreterLanguage.findMany({
+        where: { interpreter_profile: { status: ProfileStatus.APPROVED } },
+        select: { language_id: true, direction: true },
+        distinct: ['language_id', 'direction']
+      })
+    ]);
+    const directoryLanguages = new Map([...languages, ...await savedLanguageOptions(publishedDirections)]
+      .map((language) => [language.id, withLanguageLabel(language)]));
+    return {
+      languages: languages.map(withLanguageLabel),
+      directoryLanguages: [...directoryLanguages.values()].sort((a, b) => a.name.localeCompare(b.name)),
+      domains,
+      cities
+    };
+  });
+
   app.get('/profile/me', { preHandler: app.authorize(['INTERPRETER']) }, async (request, reply) => {
     const profile = await prisma.interpreterProfile.findUnique({
       where: { user_id: request.user.sub },
-      include: { languages: true, domains: true, cities: true, certifications: true }
+      include: { languages: true, domains: true, cities: true, certifications: true, user: { select: { full_name: true } } }
     });
 
     if (!profile) return reply.status(404).send({ message: 'Profile not found' });
-    return profile;
+    const savedLanguages = await savedLanguageOptions(profile.languages);
+    return reply.header('Cache-Control', 'private, no-store').send({
+      ...profile,
+      savedLanguageOptions: savedLanguages.map(withLanguageLabel)
+    });
   });
 
   app.put('/profile/wizard/step1', { preHandler: app.authorize(['INTERPRETER']) }, async (request, reply) => {
@@ -127,13 +165,17 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
     const allowed = await ensureInterpreter(request.user.sub);
     if (!allowed) return reply.status(403).send({ message: 'Forbidden' });
 
-    await prisma.user.update({ where: { id: request.user.sub }, data: { full_name: parsed.data.fullName } });
+    const city = await prisma.city.findUnique({ where: { id: parsed.data.cityId } });
+    if (!city) return reply.status(400).send({ message: 'Select a valid city' });
 
     const profile = await upsertProfile(request.user.sub);
-    await prisma.interpreterProfile.update({
-      where: { id: profile.id },
-      data: { headline: parsed.data.headline, bio: `Based in city #${parsed.data.cityId}` }
-    });
+    await prisma.$transaction([
+      prisma.user.update({ where: { id: request.user.sub }, data: { full_name: parsed.data.fullName } }),
+      prisma.interpreterProfile.update({
+        where: { id: profile.id },
+        data: { headline: parsed.data.headline, bio: `Based in ${city.name}` }
+      })
+    ]);
 
     return refreshCompleteness(request.user.sub);
   });
@@ -155,7 +197,11 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
       })
     ]);
 
-    return refreshCompleteness(request.user.sub);
+    const updated = await refreshCompleteness(request.user.sub);
+    if (updated.status === ProfileStatus.APPROVED) {
+      await upsertInterpreterProfileToIndex(prisma, app.meiliClient, app.meiliIndexName, updated.id);
+    }
+    return updated;
   });
 
   app.put('/profile/wizard/step3', { preHandler: app.authorize(['INTERPRETER']) }, async (request, reply) => {
@@ -244,6 +290,21 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
 
     await upsertInterpreterProfileToIndex(prisma, app.meiliClient, app.meiliIndexName, updated.id);
     return updated;
+  });
+
+  app.get('/admin/profiles/pending', { preHandler: app.authorize(['ADMIN']) }, async () => {
+    return prisma.interpreterProfile.findMany({
+      where: { status: ProfileStatus.PENDING },
+      orderBy: { submitted_at: 'asc' },
+      take: 100,
+      select: {
+        id: true,
+        headline: true,
+        languages: { select: { direction: true } },
+        certifications: { select: { id: true, name: true, file_url: true } },
+        user: { select: { full_name: true } }
+      }
+    });
   });
 
   app.post('/admin/profiles/:id/review', { preHandler: app.authorize(['ADMIN']) }, async (request, reply) => {

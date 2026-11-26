@@ -1,6 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { prisma } from '../plugins/prisma';
+import { emailConfigured, sendEmail } from '../utils/email';
+
+const emailPayload = z.object({ subject: z.string(), body: z.string() });
 
 export const notificationRoutes: FastifyPluginAsync = async (app) => {
   app.get('/dashboard/notifications', { preHandler: app.authenticate }, async (request) => {
@@ -26,15 +29,17 @@ export const notificationRoutes: FastifyPluginAsync = async (app) => {
 
 export async function processNotificationQueue() {
   const pending = await prisma.notification.findMany({
-    where: { status: 'PENDING' },
+    where: emailConfigured() ? { status: 'PENDING' } : { status: 'PENDING', channel: 'DASHBOARD' },
     orderBy: { created_at: 'asc' },
-    take: Number(process.env.NOTIFICATION_BATCH_SIZE || 50)
+    take: Number(process.env.NOTIFICATION_BATCH_SIZE || 50),
+    include: { user: { select: { email: true } } }
   });
 
   for (const item of pending) {
     try {
       if (item.channel === 'EMAIL') {
-        console.log('[EMAIL QUEUE]', item.payload);
+        const { subject, body } = emailPayload.parse(item.payload);
+        await sendEmail(item.user.email, subject, body);
       }
       await prisma.notification.update({
         where: { id: item.id },

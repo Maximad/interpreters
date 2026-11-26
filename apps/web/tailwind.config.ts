@@ -6,7 +6,16 @@ const config: Config = {
     './components/**/*.{js,ts,jsx,tsx,mdx}'
   ],
   theme: {
-    extend: {}
+    extend: {
+      colors: {
+        ink: '#172d25',
+        forest: '#184638',
+        canvas: '#f8f8f2',
+        mint: '#e7efe2',
+        line: '#dce5dc',
+        quiet: '#485b52'
+      }
+    }
   },
   plugins: []
 };

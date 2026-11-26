@@ -1,10 +1,9 @@
 import { PrismaClient } from '@prisma/client';
-
-const languages = ['Arabic', 'English', 'Hindi', 'Urdu', 'French', 'Tagalog'];
+import { languageCatalog } from './language-catalog';
 
 export async function seedLanguages(prisma: PrismaClient) {
   await prisma.language.createMany({
-    data: languages.map((name) => ({ name })),
+    data: languageCatalog.map((name) => ({ name })),
     skipDuplicates: true
   });
 }

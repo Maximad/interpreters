@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { Link } from '../../../../i18n/navigation';
 import { Button } from '../../../../components/ui/button';
 import { Textarea } from '../../../../components/ui/textarea';
@@ -9,7 +9,8 @@ import { useToast } from '../../../../components/providers/toast-provider';
 
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
-export default function InterpreterProfileDetailPage({ params }: { params: { id: string } }) {
+export default function InterpreterProfileDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const t = useTranslations('requestFlow');
   const { showToast } = useToast();
   const [profile, setProfile] = useState<any>(null);
@@ -17,15 +18,15 @@ export default function InterpreterProfileDetailPage({ params }: { params: { id:
   const [details, setDetails] = useState('');
 
   useEffect(() => {
-    fetch(`${apiBase}/search/interpreters/${params.id}`).then((r) => r.ok ? r.json() : null).then(setProfile);
-  }, [params.id]);
+    fetch(`${apiBase}/search/interpreters/${id}`).then((r) => r.ok ? r.json() : null).then(setProfile);
+  }, [id]);
 
   async function requestQuote() {
     const token = localStorage.getItem('im_token');
     const response = await fetch(`${apiBase}/direct-inquiries`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-      body: JSON.stringify({ interpreterProfileId: params.id, message, details })
+      body: JSON.stringify({ interpreterProfileId: id, message, details })
     });
     const data = await response.json();
     if (!response.ok) {
