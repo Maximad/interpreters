@@ -232,6 +232,7 @@ const terms = {
 };
 const incomplete = await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 200 }, expected: 400 });
 assert.equal(incomplete.code, 'INVALID_QUOTE_TERMS');
+await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 200, ...terms, paymentTerms: '  ' }, expected: 400 });
 const original = await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 200, ...terms } });
 const repeatedQuote = await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 200, ...terms } });
 assert.equal(repeatedQuote.id, original.id);
@@ -302,13 +303,26 @@ const onsiteQuote = await api(`${onsitePath}/quotes`, { method: 'POST', token: f
 localSql(`UPDATE "Quote" SET duration_minutes=NULL, payment_terms=NULL, cancellation_terms=NULL, revision=0 WHERE id='${onsiteQuote.id}';`);
 const legacyTerms = await api(`${onsitePath}/quotes/${onsiteQuote.id}/accept`, { method: 'POST', token: clientToken, expected: 409 });
 assert.equal(legacyTerms.code, 'QUOTE_TERMS_REQUIRED');
-const refreshedOnsiteQuote = await api(`${onsitePath}/quotes`, { method: 'POST', token: first.token, payload: { amountAed: 250, ...terms } });
+const refreshedOnsiteQuote = await api(`${onsitePath}/quotes`, {
+  method: 'POST', token: first.token, payload: { amountAed: 250, ...terms, cancellationTerms: 'Free' }
+});
 await api(`${onsitePath}/quotes/${onsiteQuote.id}/accept`, {
   method: 'POST', token: clientToken, payload: { expectedAmountAed: 250, expectedRevision: refreshedOnsiteQuote.revision }
 });
 const address = 'Conference Centre, Level 2';
 const onsiteSession = await api(`${onsitePath}/session`, { method: 'PUT', token: clientToken, payload: { details: address } });
 assert.equal(onsiteSession.details, address);
+localSql(`UPDATE "Request" SET scheduled_for=NOW() - INTERVAL '2 hours' WHERE id='${onsite.request.id}';`);
+const onsiteComplete = await api(`${onsitePath}/session/complete`, { method: 'POST', token: first.token });
+assert.equal(onsiteComplete.details, address);
+assert.ok(onsiteComplete.completed_at);
+
+localSql(`UPDATE "Quote" SET duration_minutes=NULL, payment_terms=NULL, cancellation_terms=NULL, revision=0 WHERE id='${refreshedOnsiteQuote.id}';`);
+const oldBooking = (await api('/dashboard/client/requests', { token: clientToken })).find(({ id }) => id === onsite.request.id);
+assert.equal(oldBooking.status, 'FILLED');
+assert.deepEqual(oldBooking.session, onsiteComplete);
+assert.equal(oldBooking.quotes.find(({ id }) => id === refreshedOnsiteQuote.id).duration_minutes, null);
+await api(`${onsitePath}/quotes/${refreshedOnsiteQuote.id}/accept`, { method: 'POST', token: clientToken });
 
 await api('/profile/wizard/step2', { method: 'PUT', token: russianInterpreter.token, payload: {
   languages: [{ languageId: english.id, direction: 'English->Russian' }]
