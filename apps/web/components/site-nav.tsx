@@ -1,20 +1,37 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Link, usePathname } from '../i18n/navigation';
+import { Link, usePathname, useRouter } from '../i18n/navigation';
+import { dashboardPath, setSessionToken, useSession } from '../lib/auth-session';
 import { LanguageSwitcher } from './language-switcher';
 
-const links = [
-  { href: '/search', label: 'search' },
-  { href: '/client/broadcast', label: 'broadcast' },
-  { href: '/interpreter/profile-wizard', label: 'profileWizard' },
-  { href: '/auth/login', label: 'login' },
-  { href: '/auth/register', label: 'register' }
-] as const;
+const search = { href: '/search', label: 'search' } as const;
+const broadcast = { href: '/client/broadcast', label: 'broadcast' } as const;
+const interpreterProfile = { href: '/interpreter/profile-wizard', label: 'myProfile' } as const;
+const guest = [{ href: '/auth/login', label: 'login' }, { href: '/auth/register', label: 'register' }] as const;
+type NavLink = { href: string; label: string };
 
 export function SiteNav() {
   const t = useTranslations('nav');
   const pathname = usePathname();
+  const router = useRouter();
+  const session = useSession();
+  const links = [search, ...(!session || session.role === 'CLIENT' ? [broadcast] : [])];
+  const accountLinks = session ? [
+    { href: dashboardPath[session.role], label: 'dashboard' },
+    ...(session.role === 'INTERPRETER' ? [interpreterProfile] : []),
+    { href: '/account', label: 'accountSettings' }
+  ] : session === null ? guest : [];
+
+  function menuLink({ href, label }: NavLink) {
+    return (
+      <Link key={href} href={href} aria-current={pathname === href ? 'page' : undefined}
+        className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-mint aria-[current=page]:bg-mint"
+        onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')}>
+        {t(label)}
+      </Link>
+    );
+  }
 
   return (
     <header className="border-b border-line bg-canvas">
@@ -25,27 +42,23 @@ export function SiteNav() {
           <span className="hidden sm:inline">{t('brand')}</span>
         </Link>
         <div className="hidden items-center gap-2 lg:flex">
-          {links.map(({ href, label }) => (
-            <Link key={href} href={href} aria-current={pathname === href ? 'page' : undefined}
-              className="inline-flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-mint aria-[current=page]:bg-mint">
-              {t(label)}
-            </Link>
-          ))}
+          {[...links, ...(session === null ? guest : [])].map(menuLink)}
         </div>
         <div className="flex items-center gap-1 sm:gap-2">
           <LanguageSwitcher />
-          <details key={pathname} className="relative lg:hidden">
+          <details key={pathname} className={`relative ${session ? '' : 'lg:hidden'}`}>
             <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-lg border border-line bg-white px-3 text-sm font-semibold hover:bg-mint [&::-webkit-details-marker]:hidden">
-              {t('menu')}
+              {t(session ? 'account' : 'menu')}
             </summary>
             <div className="absolute end-0 top-full z-20 mt-2 grid w-56 rounded-xl border border-line bg-white p-2 shadow-lg">
-              {links.map(({ href, label }) => (
-                <Link key={href} href={href} aria-current={pathname === href ? 'page' : undefined}
-                  className="flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-mint aria-[current=page]:bg-mint"
-                  onClick={(event) => event.currentTarget.closest('details')?.removeAttribute('open')}>
-                  {t(label)}
-                </Link>
-              ))}
+              <div className="grid lg:hidden">{links.map(menuLink)}</div>
+              {accountLinks.map(menuLink)}
+              {session && (
+                <button className="min-h-11 rounded-lg px-3 text-start text-sm font-semibold hover:bg-mint" type="button"
+                  onClick={() => { setSessionToken(null); router.replace('/'); }}>
+                  {t('logout')}
+                </button>
+              )}
             </div>
           </details>
         </div>

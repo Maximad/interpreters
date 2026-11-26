@@ -90,6 +90,7 @@ for (const [path, heading] of [
   ['/en', 'Interpreter Marketplace'],
   ['/en/search', 'Find interpreters'],
   ['/en/auth/register', 'register-password-rule'],
+  ['/en/account', 'Loading your account'],
   ['/ar/auth/verify-email', 'إعادة إرسال رسالة التحقق'],
   ['/en/admin/profiles', 'Interpreter profiles awaiting review'],
   ['/en/interpreter/profile-wizard', 'Interpreter Marketplace'],

@@ -1,7 +1,8 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { useEffect, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
+import { InterpreterProfileStatus, type ProfileReview } from '../../../../components/interpreter-profile-status';
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
@@ -10,7 +11,7 @@ import { Textarea } from '../../../../components/ui/textarea';
 import { Link } from '../../../../i18n/navigation';
 import { ApiError, errorMessage, requestJson, type ProfileOptions } from '../../../../lib/api';
 
-type Profile = {
+type Profile = ProfileReview & {
   headline: string | null;
   bio: string | null;
   user: { full_name: string };
@@ -24,8 +25,6 @@ type Profile = {
   years_experience: number;
   availability_notes: string | null;
   profile_completeness: number;
-  status: 'DRAFT' | 'PENDING' | 'APPROVED' | 'REJECTED';
-  rejection_reason: string | null;
 };
 
 export default function ProfileWizardPage() {
@@ -38,6 +37,7 @@ export default function ProfileWizardPage() {
   const [certificateRows, setCertificateRows] = useState(1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [editingPending, setEditingPending] = useState(false);
 
   useEffect(() => {
     const settings = { authenticated: true };
@@ -61,7 +61,21 @@ export default function ProfileWizardPage() {
       : <p>{t('loading')}</p>;
   }
 
+  if (profile?.status === 'PENDING' && !editingPending) {
+    return (
+      <section className="mx-auto max-w-2xl space-y-4 rounded-xl border border-line bg-white p-4 sm:p-6">
+        <h1 className="text-2xl font-semibold">{t('title')}</h1>
+        <InterpreterProfileStatus profile={profile} inWizard />
+        <p className="text-sm text-quiet">{t('editPendingHint')}</p>
+        <Button type="button" className="border border-line bg-white text-forest hover:bg-mint" onClick={() => setEditingPending(true)}>
+          {t('manageProfile')}
+        </Button>
+      </section>
+    );
+  }
+
   const lookups = options;
+  const submitting = step === 5 && profile?.status !== 'APPROVED';
   const homeCity = options.cities.find((city) =>
     profile?.bio === `Based in ${city.name}` || profile?.bio === `Based in city #${city.id}`);
 
@@ -69,7 +83,10 @@ export default function ProfileWizardPage() {
     return lookups.languages.find((language) => language.name.toLowerCase() === name?.trim().toLowerCase())?.id ?? '';
   }
 
-  async function save(formData: FormData) {
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const formData = new FormData(event.currentTarget);
     let body: unknown;
     const value = (field: string) => String(formData.get(field) ?? '').trim();
     switch (step) {
@@ -126,21 +143,15 @@ export default function ProfileWizardPage() {
     setError('');
     try {
       await requestJson(`/profile/wizard/step${step}`, { method: 'PUT', authenticated: true, body: JSON.stringify(body) });
-      setProfile(await requestJson<Profile>('/profile/me', { authenticated: true }));
-      setStep(Math.min(5, step + 1));
-    } catch (reason) {
-      setError(errorMessage(reason, t('saveError')));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submit() {
-    setBusy(true);
-    setError('');
-    try {
-      await requestJson('/profile/submit', { method: 'POST', authenticated: true });
-      setProfile(await requestJson<Profile>('/profile/me', { authenticated: true }));
+      const saved = await requestJson<Profile>('/profile/me', { authenticated: true });
+      setProfile(saved);
+      setEditingPending(false);
+      if (submitting) {
+        const review = await requestJson<ProfileReview>('/profile/submit', { method: 'POST', authenticated: true });
+        setProfile({ ...saved, ...review });
+      } else {
+        setStep(Math.min(5, step + 1));
+      }
     } catch (reason) {
       setError(errorMessage(reason, t('saveError')));
     } finally {
@@ -156,7 +167,7 @@ export default function ProfileWizardPage() {
         {profile && <p className="text-sm text-slate-600">{t(`status.${profile.status}`)}</p>}
         {profile?.rejection_reason && <p className="text-sm text-slate-600">{profile.rejection_reason}</p>}
       </header>
-      <form action={save} className="grid gap-4" key={step}>
+      <form onSubmit={save} className="grid gap-4" key={step}>
         {step === 1 && <>
           <Label htmlFor="fullName">{t('fullName')}</Label>
           <Input id="fullName" name="fullName" defaultValue={profile?.user.full_name} minLength={2} required />
@@ -228,12 +239,9 @@ export default function ProfileWizardPage() {
         </>}
         <div className="flex flex-wrap gap-2">
           {step > 1 && <Button type="button" onClick={() => setStep(step - 1)} disabled={busy}>{t('back')}</Button>}
-          <Button type="submit" disabled={busy}>{t('save')}</Button>
+          <Button type="submit" disabled={busy}>{t(submitting ? 'saveAndSubmit' : 'save')}</Button>
         </div>
       </form>
-      {profile?.profile_completeness === 100 && ['DRAFT', 'REJECTED'].includes(profile.status) && (
-        <Button type="button" disabled={busy} onClick={submit}>{t('submit')}</Button>
-      )}
       {error && <p className="text-sm text-red-700" role="alert">{error}</p>}
     </section>
   );

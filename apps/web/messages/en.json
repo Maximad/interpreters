@@ -9,7 +9,12 @@
     "brand": "Nass Interpreters",
     "shortBrand": "Nass",
     "mainNavigation": "Main navigation",
-    "menu": "Menu"
+    "menu": "Menu",
+    "account": "Account",
+    "dashboard": "Dashboard",
+    "myProfile": "My profile",
+    "accountSettings": "Account settings",
+    "logout": "Log out"
   },
   "home": {
     "title": "Interpreter Marketplace",
@@ -119,6 +124,28 @@
       "PENDING": "Awaiting review",
       "APPROVED": "Approved",
       "REJECTED": "Needs changes"
+    },
+    "saveAndSubmit": "Save and submit for review",
+    "manageProfile": "Edit profile",
+    "viewPublicProfile": "View public profile",
+    "editPendingHint": "Saving changes returns your profile to draft. You can submit it for review again.",
+    "next": {
+      "DRAFT": {
+        "heading": "Complete your profile",
+        "description": "Add your languages, specialties, rates, and certifications, then submit for review."
+      },
+      "PENDING": {
+        "heading": "Profile submitted for review",
+        "description": "An administrator will review your profile. Once approved, it can appear in search and receive matching requests."
+      },
+      "APPROVED": {
+        "heading": "Your profile is live",
+        "description": "Clients can find your profile. Matching requests appear on this dashboard."
+      },
+      "REJECTED": {
+        "heading": "Your profile needs changes",
+        "description": "Read the reviewer’s feedback, update your profile, and submit it again."
+      }
     }
   },
   "requestFlow": {
@@ -219,5 +246,14 @@
     "locationError": "Enter the meeting address.",
     "linkError": "Enter a meeting link that starts with https://.",
     "saveError": "Could not update this session. Try again."
+  },
+  "account": {
+    "loading": "Loading your account…",
+    "admin": "Administrator",
+    "notifications": "Email notifications",
+    "requestEmail": "Email me about matching requests",
+    "preferencesSaved": "Email preferences saved.",
+    "preferencesError": "Could not save your email preferences.",
+    "preferencesLoadError": "Could not load your email preferences."
   }
 }

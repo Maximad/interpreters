@@ -7,6 +7,7 @@ import { Label } from '../../../../components/ui/label';
 import { Button } from '../../../../components/ui/button';
 import { useToast } from '../../../../components/providers/toast-provider';
 import { Link, useRouter } from '../../../../i18n/navigation';
+import { dashboardPath, setSessionToken } from '../../../../lib/auth-session';
 import { errorMessage, requestJson } from '../../../../lib/api';
 
 export default function LoginPage() {
@@ -27,14 +28,9 @@ export default function LoginPage() {
         method: 'POST',
         body: JSON.stringify(payload)
       });
-      localStorage.setItem('im_token', data.token);
+      setSessionToken(data.token);
       showToast({ title: t('successTitle'), description: t('loginSuccess') });
-      const destination = {
-        ADMIN: '/admin/profiles',
-        CLIENT: '/client/dashboard',
-        INTERPRETER: '/interpreter/dashboard'
-      } as const;
-      router.push(destination[data.user.role]);
+      router.push(dashboardPath[data.user.role]);
     } catch (error) {
       const message = errorMessage(error, t('loginError'));
       setError(message);
