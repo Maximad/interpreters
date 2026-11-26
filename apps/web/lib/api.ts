@@ -3,7 +3,7 @@ import { getSessionToken, setSessionToken } from './auth-session';
 const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
 export class ApiError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly code?: string) {
     super(message);
   }
 }
@@ -22,7 +22,7 @@ export async function requestJson<T>(path: string, options: RequestInit & { auth
   if (!response.ok) {
     if (token && response.status === 401 && token === getSessionToken()) setSessionToken(null);
     const body = await response.json().catch(() => null);
-    throw new ApiError(response.status, typeof body?.message === 'string' ? body.message : '');
+    throw new ApiError(response.status, typeof body?.message === 'string' ? body.message : '', typeof body?.code === 'string' ? body.code : undefined);
   }
   return response.json();
 }

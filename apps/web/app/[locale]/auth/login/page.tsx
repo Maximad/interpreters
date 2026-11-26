@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { useState } from 'react';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
+import { GoogleSignIn } from '../../../../components/google-sign-in';
 import { Button } from '../../../../components/ui/button';
 import { useToast } from '../../../../components/providers/toast-provider';
 import { Link, useRouter } from '../../../../i18n/navigation';
@@ -53,6 +54,7 @@ export default function LoginPage() {
         {error ? <p className="text-sm text-red-600" role="alert">{error}</p> : null}
         <Button className="w-full" type="submit">{t('login')}</Button>
       </form>
+      <GoogleSignIn mode="login" />
       <Link className="mt-4 inline-block text-sm text-blue-700" href="/auth/verify-email">{t('verifyEmail')}</Link>
     </section>
   );

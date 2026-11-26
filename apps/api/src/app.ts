@@ -7,6 +7,7 @@ import meilisearchPlugin from './plugins/meilisearch';
 import { prisma } from './plugins/prisma';
 import { healthRoute } from './routes/health';
 import { authRoutes } from './routes/auth';
+import { googleAuthRoutes } from './routes/google-auth';
 import { profileRoutes } from './routes/profile';
 import { searchRoutes } from './routes/search';
 import { syncApprovedInterpreterProfiles } from './utils/search-index';
@@ -55,6 +56,7 @@ export function buildApp() {
 
   app.register(healthRoute);
   app.register(authRoutes, { prefix: '/api' });
+  app.register(googleAuthRoutes, { prefix: '/api' });
   app.register(profileRoutes, { prefix: '/api' });
   app.register(searchRoutes, { prefix: '/api' });
   app.register(inquiryRoutes, { prefix: '/api' });

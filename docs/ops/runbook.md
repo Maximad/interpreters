@@ -18,6 +18,14 @@ Registration and verification resend are available after the public origin and e
 
 For a Hostinger Email mailbox on an existing VPS deployment, run `bash scripts/configure-hostinger-smtp.sh MAILBOX_ADDRESS` in the Web console. It prompts for the password, checks SMTP authentication, and applies the settings to the running API.
 
+## Enable Sign in with Google
+
+In Google Auth Platform, configure the app consent screen and create an OAuth client of type **Web application**. Add the exact `PUBLIC_BASE_URL` origin, such as `https://interpreters.nass.life`, under **Authorized JavaScript origins**. For a consent screen in testing, add the pilot users' Google accounts to its test-user list. [Google setup guide](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid)
+
+Set `GOOGLE_CLIENT_ID` to the web client ID in `/etc/interpreters/interpreters.env` and apply the release from the Web console. The button uses the Google Identity Services JavaScript callback and needs only the public client ID. Leave the value empty until the Google project is ready.
+
+Check `/api/auth/google/config` for `{"enabled":true}`. Then test signing in with a linked account and creating a new client or interpreter account. Existing users link Google in **Account settings** with their current Nass password. [Google ID token verification guide](https://developers.google.com/identity/gsi/web/guides/verify-google-id-token)
+
 ## Database upgrades
 
 An empty database applies all migrations and seeds lookup values automatically. A database initialized by an older deployment may already have the schema from `20260217140000_initial`. Back up that database and compare its schema to the migration before marking the baseline applied. If its quote uniqueness index also exists, check whether `20260217150000_quote_request_profile_unique` is already recorded as applied.

@@ -255,5 +255,22 @@
     "preferencesSaved": "Email preferences saved.",
     "preferencesError": "Could not save your email preferences.",
     "preferencesLoadError": "Could not load your email preferences."
+  },
+  "googleAuth": {
+    "failed": "Google sign-in could not finish. Try again.",
+    "working": "Connecting to Google…",
+    "accountHeading": "Google sign-in",
+    "linked": "Your Google account is linked.",
+    "currentPassword": "Current Nass password",
+    "passwordRequired": "Enter your Nass password before linking Google.",
+    "tryLater": "Too many attempts. Try again later.",
+    "expired": "Your Google sign-in request expired. Try again.",
+    "verifyEmail": "Verify your Nass email before signing in.",
+    "useNassPassword": "Log in with your Nass password, then link Google in Account settings.",
+    "chooseRole": "Choose Create account to select your role first.",
+    "useVerifiedGoogleEmail": "Use a verified Gmail or Google Workspace address, or create an account with email.",
+    "accountExists": "This account already exists. Log in to continue.",
+    "differentGoogleAccount": "This Nass account already has a different Google login.",
+    "alreadyLinked": "That Google account is linked to another Nass account."
   }
 }

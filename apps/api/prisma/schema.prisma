@@ -53,6 +53,7 @@ model User {
   id                        String                    @id @default(cuid())
   email                     String                    @unique
   password_hash             String
+  google_subject            String?                   @unique
   full_name                 String
   role                      UserRole                  @default(CLIENT)
   is_email_verified         Boolean                   @default(false)

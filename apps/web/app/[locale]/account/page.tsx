@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+import { GoogleAccountLink } from '../../../components/google-account-link';
 import { Button } from '../../../components/ui/button';
 import { Link, useRouter } from '../../../i18n/navigation';
 import { ApiError, requestJson } from '../../../lib/api';
@@ -80,6 +81,7 @@ export default function AccountPage() {
         </div>
       )}
       {feedback && <p className={feedback.error ? 'text-sm text-red-800' : 'text-sm text-forest'} role={feedback.error ? 'alert' : 'status'}>{feedback.message}</p>}
+      <GoogleAccountLink key={session.email} />
       <Button type="button" className="border border-line bg-white text-forest hover:bg-mint" onClick={() => { setSessionToken(null); router.replace('/'); }}>
         {nav('logout')}
       </Button>

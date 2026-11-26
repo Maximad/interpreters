@@ -58,15 +58,16 @@ function checkRateLimit(key: string, maxAttempts: number, windowMs: number): Rat
   return { allowed: true, retryAfterSeconds: 0 };
 }
 
-function enforceAuthRateLimit(
+export function enforceAuthRateLimit(
   requestIp: string,
-  route: 'signup' | 'login' | 'verify-email' | 'resend-verification'
+  route: 'signup' | 'login' | 'verify-email' | 'resend-verification' | 'google'
 ): RateLimitResult {
   const limits = {
     signup: { maxAttempts: 10, windowMs: 15 * 60 * 1000 },
     login: { maxAttempts: 20, windowMs: 15 * 60 * 1000 },
     'verify-email': { maxAttempts: 30, windowMs: 15 * 60 * 1000 },
-    'resend-verification': { maxAttempts: 8, windowMs: 15 * 60 * 1000 }
+    'resend-verification': { maxAttempts: 8, windowMs: 15 * 60 * 1000 },
+    google: { maxAttempts: 60, windowMs: 15 * 60 * 1000 }
   } as const;
 
   const selected = limits[route];

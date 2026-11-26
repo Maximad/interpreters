@@ -226,5 +226,22 @@
     "preferencesSaved": "تم حفظ تفضيلات البريد الإلكتروني.",
     "preferencesError": "تعذّر حفظ تفضيلات البريد الإلكتروني.",
     "preferencesLoadError": "تعذّر تحميل تفضيلات البريد الإلكتروني."
+  },
+  "googleAuth": {
+    "failed": "تعذّر إكمال تسجيل الدخول عبر Google. حاول مجددًا.",
+    "working": "جارٍ الاتصال بـ Google…",
+    "accountHeading": "تسجيل الدخول عبر Google",
+    "linked": "تم ربط حساب Google.",
+    "currentPassword": "كلمة مرور حساب ناس الحالية",
+    "passwordRequired": "أدخل كلمة مرور حساب ناس قبل ربط Google.",
+    "tryLater": "محاولات كثيرة. حاول مرة أخرى لاحقًا.",
+    "expired": "انتهت صلاحية طلب تسجيل الدخول عبر Google. حاول مرة أخرى.",
+    "verifyEmail": "تحقّق من بريدك الإلكتروني في ناس قبل تسجيل الدخول.",
+    "useNassPassword": "سجّل الدخول بكلمة مرور ناس، ثم اربط حساب Google من إعدادات الحساب.",
+    "chooseRole": "اختر «إنشاء حساب» لتحديد دورك أولًا.",
+    "useVerifiedGoogleEmail": "استخدم عنوان Gmail أو Google Workspace موثّقًا، أو أنشئ حسابًا بالبريد الإلكتروني.",
+    "accountExists": "هذا الحساب موجود بالفعل. سجّل الدخول للمتابعة.",
+    "differentGoogleAccount": "حساب ناس هذا مرتبط بحساب Google آخر.",
+    "alreadyLinked": "حساب Google هذا مرتبط بحساب ناس آخر."
   }
 }

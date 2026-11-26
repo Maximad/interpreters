@@ -2,6 +2,7 @@
 
 import { useTranslations } from 'next-intl';
 import { type FormEvent, useEffect, useRef, useState } from 'react';
+import { GoogleSignIn } from '../../../../components/google-sign-in';
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
@@ -23,6 +24,7 @@ export default function RegisterPage() {
   const t = useTranslations('auth');
   const { showToast } = useToast();
   const router = useRouter();
+  const [role, setRole] = useState<'CLIENT' | 'INTERPRETER'>('CLIENT');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<FormError | null>(null);
   const errorSummary = useRef<HTMLDivElement>(null);
@@ -98,13 +100,14 @@ export default function RegisterPage() {
         })}
         <div className="grid gap-1.5">
           <Label htmlFor="role">{t('role')}</Label>
-          <Select id="role" name="role">
+          <Select id="role" name="role" value={role} onChange={(event) => setRole(event.target.value === 'INTERPRETER' ? 'INTERPRETER' : 'CLIENT')}>
             <option value="CLIENT">{t('client')}</option>
             <option value="INTERPRETER">{t('interpreter')}</option>
           </Select>
         </div>
         <Button className="w-full" type="submit" disabled={busy}>{t(busy ? 'registering' : 'register')}</Button>
       </form>
+      <GoogleSignIn mode="register" role={role} />
       <Link className="inline-flex min-h-11 items-center text-sm font-semibold text-forest underline underline-offset-4" href="/auth/verify-email">{t('verifyEmail')}</Link>
     </section>
   );
