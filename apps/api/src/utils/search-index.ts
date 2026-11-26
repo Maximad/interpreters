@@ -1,6 +1,6 @@
 import { PrismaClient, ProfileStatus } from '@prisma/client';
 import { MeiliSearch } from 'meilisearch';
-import { parseLanguagePair } from './language-pair';
+import { languageDirection, parseLanguagePair } from './language-pair';
 
 export type InterpreterSearchDoc = {
   id: string;
@@ -42,7 +42,9 @@ function toDoc(profile: {
     full_name: profile.user.full_name,
     headline: profile.headline,
     bio: profile.bio,
-    languages: profile.languages.map((item) => item.language.name),
+    languages: [...new Set(profile.languages.flatMap((item) => [
+      item.language.name, ...(languageDirection(item.direction) ?? [])
+    ]))],
     language_pairs: Array.from(new Set(profile.languages.flatMap((item) => {
       const pair = parseLanguagePair(item.direction);
       return pair ? [pair] : [];

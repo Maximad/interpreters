@@ -148,7 +148,19 @@
       }
     }
   },
+  "languagePicker": {
+    "search": "Search languages",
+    "suggestions": "Matching languages",
+    "noResults": "No matching languages. Try a different spelling.",
+    "chooseMatch": "Choose a language from the suggestions."
+  },
   "requestFlow": {
+    "loadingPairs": "Checking available language pairs…",
+    "pairsError": "Could not check language availability.",
+    "noOnsitePairs": "No interpreters cover this subject in this city. Try another city, subject area, or remote interpreting.",
+    "noRemotePairs": "No remote interpreters cover this subject yet. Try another subject area or choose on-site interpreting.",
+    "chooseSourceFirst": "Choose a source language first",
+    "pairUnavailable": "This language pair is no longer available. Choose another pair or change your request options.",
     "loading": "Loading...",
     "backToSearch": "Back to search",
     "requestQuote": "Request quote",

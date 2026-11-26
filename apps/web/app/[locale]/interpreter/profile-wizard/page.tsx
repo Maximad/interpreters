@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { type FormEvent, useEffect, useState } from 'react';
 import { InterpreterProfileStatus, type ProfileReview } from '../../../../components/interpreter-profile-status';
+import { LanguagePicker } from '../../../../components/language-picker';
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
 import { Label } from '../../../../components/ui/label';
@@ -78,10 +79,6 @@ export default function ProfileWizardPage() {
   const submitting = step === 5 && profile?.status !== 'APPROVED';
   const homeCity = options.cities.find((city) =>
     profile?.bio === `Based in ${city.name}` || profile?.bio === `Based in city #${city.id}`);
-
-  function languageId(name?: string) {
-    return lookups.languages.find((language) => language.name.toLowerCase() === name?.trim().toLowerCase())?.id ?? '';
-  }
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -160,7 +157,7 @@ export default function ProfileWizardPage() {
   }
 
   return (
-    <section className="mx-auto max-w-2xl space-y-5 rounded-lg border bg-white p-6">
+    <section className="mx-auto max-w-2xl space-y-5 rounded-lg border bg-white p-4 sm:p-6">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold">{t('title')}</h1>
         <p>{t('stepLabel', { step })}</p>
@@ -183,15 +180,15 @@ export default function ProfileWizardPage() {
           {Array.from({ length: languageRows }, (_, index) => {
             const pair = profile?.languages[index]?.direction.split(/->|→/u) ?? [];
             return <div className="grid gap-2 sm:grid-cols-2" key={index}>
-              {[{ field: 'source', label: 'sourceLanguage', name: pair[0] }, { field: 'target', label: 'targetLanguage', name: pair[1] }].map(({ field, label, name }) => (
-                <Label className="grid gap-2" key={field}>
-                  {t(label)}
-                  <Select name={field} defaultValue={languageId(name)} required>
-                    <option value="" disabled>{t('choose')}</option>
-                    {options.languages.map((language) => <option key={language.id} value={language.id}>{language.name}</option>)}
-                  </Select>
-                </Label>
-              ))}
+              {[{ field: 'source', label: 'sourceLanguage', name: pair[0] }, { field: 'target', label: 'targetLanguage', name: pair[1] }].map(({ field, label, name }) => {
+                const id = `pair-${index}-${field}`;
+                return (
+                  <div className="grid min-w-0 gap-1.5" key={field}>
+                    <Label htmlFor={id}>{t(label)}</Label>
+                    <LanguagePicker id={id} name={field} languages={lookups.languages} defaultValue={name?.trim()} required />
+                  </div>
+                );
+              })}
             </div>;
           })}
           <div className="flex flex-wrap gap-2">

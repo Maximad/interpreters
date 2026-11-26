@@ -169,7 +169,11 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
       })
     ]);
 
-    return refreshCompleteness(request.user.sub);
+    const updated = await refreshCompleteness(request.user.sub);
+    if (updated.status === ProfileStatus.APPROVED) {
+      await upsertInterpreterProfileToIndex(prisma, app.meiliClient, app.meiliIndexName, updated.id);
+    }
+    return updated;
   });
 
   app.put('/profile/wizard/step3', { preHandler: app.authorize(['INTERPRETER']) }, async (request, reply) => {

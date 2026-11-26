@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
+import { LanguagePicker } from '../../../components/language-picker';
 import { Button } from '../../../components/ui/button';
 import { Label } from '../../../components/ui/label';
 import { Select } from '../../../components/ui/select';
@@ -55,7 +56,7 @@ export default function SearchPage() {
     const controller = new AbortController();
     const params = new URLSearchParams({ page: String(query.page), page_size: String(pageSize) });
     for (const field of filterFields) {
-      if (query.filters[field]) params.set(field, query.filters[field]);
+      if (query.filters[field]) params.set(field === 'languages' ? 'language' : field, query.filters[field]);
     }
     requestJson<SearchResponse>(`/search/interpreters?${params}`, { signal: controller.signal })
       .then((result) => setSearch({ query, result }))
@@ -85,16 +86,21 @@ export default function SearchPage() {
         {filterFields.map((field) => (
           <div className="grid min-w-0 gap-2" key={field}>
             <Label htmlFor={`search-${field}`}>{t(field)}</Label>
-            <Select
-              id={`search-${field}`}
-              className="border-quiet/70"
-              value={draft[field]}
-              disabled={!options}
-              onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
-            >
-              <option value="">{t(`any.${field}`)}</option>
-              {options?.[field].map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}
-            </Select>
+            {field === 'languages' ? (
+              <LanguagePicker id="search-languages" languages={options?.languages ?? []} value={draft.languages}
+                onChange={(languages) => setDraft({ ...draft, languages })} placeholder={t('any.languages')} disabled={!options} />
+            ) : (
+              <Select
+                id={`search-${field}`}
+                className="border-quiet/70"
+                value={draft[field]}
+                disabled={!options}
+                onChange={(event) => setDraft({ ...draft, [field]: event.target.value })}
+              >
+                <option value="">{t(`any.${field}`)}</option>
+                {options?.[field].map((item) => <option key={item.id} value={item.name}>{item.name}</option>)}
+              </Select>
+            )}
           </div>
         ))}
         <Button type="submit" disabled={!options} className="w-full rounded-lg px-6">{t('applyFilters')}</Button>

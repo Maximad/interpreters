@@ -109,9 +109,21 @@ await hero.arrayBuffer();
 const options = await api('/profile/options');
 const arabic = options.languages.find((language) => language.name === 'Arabic');
 const english = options.languages.find((language) => language.name === 'English');
+const russian = options.languages.find((language) => language.name === 'Russian');
 const dubai = options.cities.find((city) => city.name === 'Dubai');
 const abuDhabi = options.cities.find((city) => city.name === 'Abu Dhabi');
-assert.ok(arabic && english && dubai && abuDhabi);
+assert.ok(arabic && english && russian && dubai && abuDhabi);
+assert.ok(options.languages.length > 7500);
+assert.ok(options.languages.some(({ name }) => name === 'American Sign Language'));
+
+const requestOptions = await api('/requests/options');
+assert.deepEqual(requestOptions.cities, options.cities);
+assert.equal(Object.hasOwn(requestOptions, 'languages'), false);
+
+async function availablePairs(city) {
+  const params = new URLSearchParams({ domain: domainName, ...(city ? { city } : {}) });
+  return (await api(`/requests/language-pairs?${params}`)).pairs;
+}
 
 const domainId = Number(localSql(`INSERT INTO "Domain" (name) VALUES ('${domainName}') RETURNING id;`).split('\n')[0]);
 assert.ok(domainId > 0);
@@ -122,13 +134,13 @@ localSql(`UPDATE "User" SET role = 'ADMIN' WHERE email = '${admin.email}';`);
 const clientToken = await login(client.email);
 const adminToken = await login(admin.email);
 
-async function createProfile(name, source, target) {
+async function createProfile(name, source, target, { city = dubai, remoteEnabled = true } = {}) {
   const account = await signup(name, 'INTERPRETER');
   const token = await login(account.email);
   const steps = [
-    { fullName: name, headline: 'Conference interpreter', cityId: dubai.id },
+    { fullName: name, headline: 'Conference interpreter', cityId: city.id },
     { languages: [{ languageId: source.id, direction: `${source.name} → ${target.name}` }] },
-    { domainIds: [domainId], coveredCityIds: [dubai.id], onsiteEnabled: true, remoteEnabled: true },
+    { domainIds: [domainId], coveredCityIds: [city.id], onsiteEnabled: true, remoteEnabled },
     { hourlyRateAed: 150, yearsExperience: 5, availabilityNotes: 'Available by appointment' },
     { certifications: [{ name: 'Test certificate', fileUrl: 'https://example.test/certificate.pdf' }] }
   ];
@@ -143,13 +155,21 @@ async function createProfile(name, source, target) {
 const first = await createProfile('Test Interpreter One', arabic, english);
 const second = await createProfile('Test Interpreter Two', arabic, english);
 const reversed = await createProfile('Test Reverse Pair', english, arabic);
+const russianInterpreter = await createProfile('Test Russian Interpreter', russian, english, { city: abuDhabi, remoteEnabled: false });
+assert.deepEqual(await availablePairs(abuDhabi.name), []);
 const pending = await api('/admin/profiles/pending', { token: adminToken });
-for (const { profileId } of [first, second, reversed]) {
+for (const { profileId } of [first, second, reversed, russianInterpreter]) {
   assert.ok(pending.some((profile) => profile.id === profileId));
   await api(`/admin/profiles/${profileId}/review`, {
     method: 'POST', token: adminToken, payload: { status: 'APPROVED' }
   });
 }
+const remotePairs = await availablePairs();
+assert.equal(remotePairs.length, 2);
+assert.ok(remotePairs.some(({ source, target }) => source === 'Arabic' && target === 'English'));
+assert.ok(remotePairs.some(({ source, target }) => source === 'English' && target === 'Arabic'));
+assert.deepEqual(await availablePairs(abuDhabi.name), [{ source: 'Russian', target: 'English' }]);
+assert.ok((await availablePairs(dubai.name)).every(({ source }) => source !== 'Russian'));
 
 const requestDetails = {
   sourceLanguage: arabic.name, targetLanguage: english.name, domain: domainName,
@@ -159,6 +179,18 @@ await api('/requests/broadcast', {
   method: 'POST', token: clientToken, expected: 400,
   payload: { ...requestDetails, onsiteRequired: true, remoteAllowed: false }
 });
+const unavailable = await api('/requests/broadcast', {
+  method: 'POST', token: clientToken, expected: 409,
+  payload: { ...requestDetails, sourceLanguage: 'Russian', onsiteRequired: false, remoteAllowed: true }
+});
+assert.equal(unavailable.code, 'PAIR_UNAVAILABLE');
+assert.deepEqual(await api('/dashboard/client/requests', { token: clientToken }), []);
+
+const russianRequest = await api('/requests/broadcast', {
+  method: 'POST', token: clientToken,
+  payload: { ...requestDetails, sourceLanguage: 'Russian', city: abuDhabi.name, onsiteRequired: true, remoteAllowed: false }
+});
+assert.equal(russianRequest.matchedCount, 1);
 const result = await api('/requests/broadcast', {
   method: 'POST', token: clientToken,
   payload: { ...requestDetails, onsiteRequired: false, remoteAllowed: true }
@@ -233,4 +265,11 @@ const address = 'Conference Centre, Level 2';
 const onsiteSession = await api(`${onsitePath}/session`, { method: 'PUT', token: clientToken, payload: { details: address } });
 assert.equal(onsiteSession.details, address);
 
-console.log('Verified signup, profile review, exact matching, quote acceptance, private meeting details and completion.');
+await api('/profile/wizard/step2', { method: 'PUT', token: russianInterpreter.token, payload: {
+  languages: [{ languageId: english.id, direction: 'English->Russian' }]
+} });
+assert.deepEqual(await availablePairs(abuDhabi.name), [{ source: 'English', target: 'Russian' }]);
+const directory = await api('/search/interpreters?language=Russian');
+assert.ok(directory.hits.some(({ id }) => id === russianInterpreter.profileId));
+
+console.log('Verified signup, profile review, language catalogue, remote and city coverage, exact matching, quote acceptance, private meeting details and completion.');

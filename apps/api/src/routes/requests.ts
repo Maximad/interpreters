@@ -2,19 +2,16 @@ import type { FastifyPluginAsync } from 'fastify';
 import { NotificationChannel, type Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../plugins/prisma';
-import { languagePair } from '../utils/language-pair';
-import {
-  booleanEquals,
-  numberGreaterThanOrEqual,
-  numberLessThanOrEqual,
-  stringEquals
-} from '../utils/meili-filter';
+import { languageDirection, languageKey, languagePair, parseLanguagePair } from '../utils/language-pair';
 
-const broadcastSchema = z.object({
-  sourceLanguage: z.string().min(2),
-  targetLanguage: z.string().min(2),
-  domain: z.string().min(2),
-  city: z.string().min(2).optional(),
+const availabilitySchema = z.object({
+  domain: z.string().trim().min(2).max(200),
+  city: z.string().trim().min(2).max(200).optional()
+});
+
+const broadcastSchema = availabilitySchema.extend({
+  sourceLanguage: z.string().trim().min(1).max(200),
+  targetLanguage: z.string().trim().min(1).max(200),
   onsiteRequired: z.boolean(),
   remoteAllowed: z.boolean(),
   scheduledFor: z.string().datetime(),
@@ -76,25 +73,57 @@ function startOfToday() {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-export function meiliFilter(input: z.infer<typeof broadcastSchema>) {
-  const clauses: string[] = [
-    `(${stringEquals('language_pairs', languagePair(input.sourceLanguage, input.targetLanguage))})`,
-    `(${stringEquals('domains', input.domain)})`
-  ];
-  if (input.onsiteRequired) {
-    clauses.push(`(${stringEquals('cities', input.city ?? '')})`, `(${booleanEquals('onsite_enabled', true)})`);
-  } else if (input.remoteAllowed) {
-    clauses.push(`(${booleanEquals('remote_enabled', true)})`);
-  }
-
-  if (typeof input.budgetMinAed === 'number') clauses.push(`(${numberGreaterThanOrEqual('hourly_rate_aed', input.budgetMinAed)})`);
-  if (typeof input.budgetMaxAed === 'number') clauses.push(`(${numberLessThanOrEqual('hourly_rate_aed', input.budgetMaxAed)})`);
-  if (typeof input.minYears === 'number') clauses.push(`(${numberGreaterThanOrEqual('years_experience', input.minYears)})`);
-  if (input.verifiedOnly) clauses.push(`(${booleanEquals('is_email_verified', true)})`);
-  return clauses.join(' AND ');
+function availabilityWhere({ domain, city }: z.infer<typeof availabilitySchema>): Prisma.InterpreterProfileWhereInput {
+  return {
+    status: 'APPROVED',
+    domains: { some: { domain: { name: { in: [domain], mode: 'insensitive' } } } },
+    ...(city
+      ? { onsite_enabled: true, cities: { some: { city: { name: { in: [city], mode: 'insensitive' } } } } }
+      : { remote_enabled: true })
+  };
 }
 
 export const requestRoutes: FastifyPluginAsync = async (app) => {
+  app.get('/requests/options', async () => {
+    const orderBy = { name: 'asc' } as const;
+    const [domains, cities] = await Promise.all([
+      prisma.domain.findMany({ orderBy }),
+      prisma.city.findMany({ orderBy })
+    ]);
+    return { domains, cities };
+  });
+
+  app.get('/requests/language-pairs', async (request, reply) => {
+    const parsed = availabilitySchema.safeParse(request.query);
+    if (!parsed.success) return reply.status(400).send({ message: 'Choose a valid subject area and city' });
+
+    const directions = await prisma.interpreterLanguage.findMany({
+      where: { interpreter_profile: availabilityWhere(parsed.data) },
+      select: { direction: true },
+      distinct: ['direction']
+    });
+    const pairs = new Map<string, [string, string]>();
+    const names = new Set<string>();
+    for (const { direction } of directions) {
+      const pair = languageDirection(direction);
+      if (!pair) continue;
+      pair.forEach((name) => names.add(name));
+      pairs.set(languagePair(...pair), pair);
+    }
+    const languages = names.size > 0 ? await prisma.language.findMany({
+      where: { name: { in: [...names], mode: 'insensitive' } },
+      select: { name: true }
+    }) : [];
+    const labels = new Map(languages.map(({ name }) => [languageKey(name), name]));
+
+    return reply.header('Cache-Control', 'no-store').send({
+      pairs: Array.from(pairs.values(), ([source, target]) => ({
+        source: labels.get(languageKey(source)) ?? source,
+        target: labels.get(languageKey(target)) ?? target
+      }))
+    });
+  });
+
   app.post('/requests/broadcast', { preHandler: app.authorize(['CLIENT']) }, async (request, reply) => {
     const parsed = broadcastSchema.safeParse(request.body);
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
@@ -111,29 +140,29 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
     if (input.onsiteRequired && !input.city) {
       return reply.status(400).send({ message: 'Choose a city for on-site interpreting' });
     }
-    if (languagePair(input.sourceLanguage, input.targetLanguage) === languagePair(input.targetLanguage, input.sourceLanguage)) {
+    if (languageKey(input.sourceLanguage) === languageKey(input.targetLanguage)) {
       return reply.status(400).send({ message: 'Choose two different languages' });
     }
-    const meiliResult = await app.meiliClient.index(app.meiliIndexName).search('', {
-      filter: meiliFilter(input),
-      limit: recipientCapDefault,
-      sort: ['is_email_verified:desc', 'profile_completeness:desc', 'updated_at:desc']
+
+    const pair = languagePair(input.sourceLanguage, input.targetLanguage);
+    const candidates = await prisma.interpreterProfile.findMany({
+      where: {
+        ...availabilityWhere({ domain: input.domain, city: input.onsiteRequired ? input.city : undefined }),
+        ...(input.budgetMinAed !== undefined || input.budgetMaxAed !== undefined
+          ? { hourly_rate_aed: { gte: input.budgetMinAed, lte: input.budgetMaxAed } }
+          : {}),
+        ...(input.minYears !== undefined ? { years_experience: { gte: input.minYears } } : {}),
+        ...(input.verifiedOnly ? { user: { is_email_verified: true } } : {})
+      },
+      orderBy: [{ user: { is_email_verified: 'desc' } }, { profile_completeness: 'desc' }, { updated_at: 'desc' }],
+      select: { id: true, user_id: true, opt_out_broadcast_emails: true, languages: { select: { direction: true } } }
     });
-
-    const profileIds = meiliResult.hits
-      .flatMap((hit) => {
-        if (typeof (hit as { id?: unknown }).id === 'string') {
-          return [(hit as { id: string }).id];
-        }
-
-        return [];
-      })
-      .slice(0, recipientCapDefault);
-
-    const profiles = await prisma.interpreterProfile.findMany({
-      where: { id: { in: profileIds }, status: 'APPROVED' },
-      select: { id: true, user_id: true, opt_out_broadcast_emails: true }
-    });
+    const profiles = candidates.filter((profile) =>
+      profile.languages.some(({ direction }) => parseLanguagePair(direction) === pair)
+    ).slice(0, recipientCapDefault);
+    if (profiles.length === 0) {
+      return reply.status(409).send({ code: 'PAIR_UNAVAILABLE', message: 'No interpreters are available for these request options' });
+    }
 
     const created = await prisma.$transaction(async (db) => {
       const newRequest = await db.request.create({
