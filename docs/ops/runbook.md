@@ -16,6 +16,8 @@ Set the following in the environment file.
 
 Registration and verification resend are available after the public origin and email sender are configured. The browser uses the gateway's relative `/api` path, so hostname changes do not require new images.
 
+For a Hostinger Email mailbox on an existing VPS deployment, run `bash scripts/configure-hostinger-smtp.sh MAILBOX_ADDRESS` in the Web console. It prompts for the password, checks SMTP authentication, and applies the settings to the running API.
+
 ## Database upgrades
 
 An empty database applies all migrations and seeds lookup values automatically. A database initialized by an older deployment may already have the schema from `20260217140000_initial`. Back up that database and compare its schema to the migration before marking the baseline applied. If its quote uniqueness index also exists, check whether `20260217150000_quote_request_profile_unique` is already recorded as applied.
