@@ -120,9 +120,9 @@ export default function InterpreterDashboardPage() {
                 <Label htmlFor={`duration-${id}`}>{pilot('durationMinutes')}</Label>
                 <Input id={`duration-${id}`} type="number" inputMode="numeric" name="durationMinutes" min="1" max="1440" defaultValue={quote?.duration_minutes ?? ''} required />
                 <Label htmlFor={`payment-${id}`}>{pilot('paymentTerms')}</Label>
-                <Textarea id={`payment-${id}`} name="paymentTerms" defaultValue={quote?.payment_terms ?? ''} placeholder={pilot('paymentExample')} rows={2} minLength={5} maxLength={500} required />
+                <Textarea id={`payment-${id}`} name="paymentTerms" defaultValue={quote?.payment_terms ?? ''} placeholder={pilot('paymentExample')} rows={2} maxLength={500} required />
                 <Label htmlFor={`cancellation-${id}`}>{pilot('cancellationTerms')}</Label>
-                <Textarea id={`cancellation-${id}`} name="cancellationTerms" defaultValue={quote?.cancellation_terms ?? ''} placeholder={pilot('cancellationExample')} rows={2} minLength={5} maxLength={500} required />
+                <Textarea id={`cancellation-${id}`} name="cancellationTerms" defaultValue={quote?.cancellation_terms ?? ''} placeholder={pilot('cancellationExample')} rows={2} maxLength={500} required />
                 <Label htmlFor={`message-${id}`}>{t('optionalMessage')}</Label>
                 <Textarea id={`message-${id}`} name="message" defaultValue={quote?.message ?? ''} rows={2} minLength={3} maxLength={500} />
                 <Button type="submit" disabled={busy}>{t(quote ? 'updateQuote' : 'submitQuote')}</Button>

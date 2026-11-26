@@ -160,9 +160,9 @@
     "durationMinutes": "Duration in minutes",
     "durationValue": "{minutes, plural, one {# minute} other {# minutes}}",
     "paymentTerms": "Payment terms",
-    "paymentExample": "Example: Pay within 7 days of receiving the invoice.",
+    "paymentExample": "Pay within 7 days of receiving the invoice.",
     "cancellationTerms": "Cancellation terms",
-    "cancellationExample": "Example: No charge for cancellations at least 24 hours before the session.",
+    "cancellationExample": "No charge for cancellations at least 24 hours before the session.",
     "policy": {
       "payments": {
         "title": "Quotes and payments",

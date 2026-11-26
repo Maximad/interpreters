@@ -142,9 +142,9 @@
     "durationMinutes": "المدة بالدقائق",
     "durationValue": "{minutes} دقيقة",
     "paymentTerms": "شروط الدفع",
-    "paymentExample": "مثال: يُدفع المبلغ خلال ٧ أيام من استلام الفاتورة.",
+    "paymentExample": "يُدفع المبلغ خلال ٧ أيام من استلام الفاتورة.",
     "cancellationTerms": "شروط الإلغاء",
-    "cancellationExample": "مثال: الإلغاء مجاني قبل موعد الجلسة بـ٢٤ ساعة على الأقل.",
+    "cancellationExample": "الإلغاء مجاني قبل موعد الجلسة بـ٢٤ ساعة على الأقل.",
     "policy": {
       "payments": {
         "title": "عروض الأسعار والدفع",

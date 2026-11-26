@@ -26,8 +26,8 @@ const broadcastSchema = availabilitySchema.extend({
 const quoteSchema = z.object({
   amountAed: z.number().positive().max(99999999.99).refine((amount) => Number(amount.toFixed(2)) === amount),
   durationMinutes: z.number().int().min(1).max(1440),
-  paymentTerms: z.string().trim().min(5).max(500),
-  cancellationTerms: z.string().trim().min(5).max(500),
+  paymentTerms: z.string().trim().min(1).max(500),
+  cancellationTerms: z.string().trim().min(1).max(500),
   message: z.string().trim().min(3).max(500).optional()
 });
 
