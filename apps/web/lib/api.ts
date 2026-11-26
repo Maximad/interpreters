@@ -27,8 +27,8 @@ export async function requestJson<T>(path: string, options: RequestInit & { auth
   return response.json();
 }
 
-export type Lookup = { id: number; name: string };
-export type ProfileOptions = { languages: Lookup[]; domains: Lookup[]; cities: Lookup[] };
+export type Lookup = { id: number; name: string; label?: string };
+export type ProfileOptions = { languages: Lookup[]; directoryLanguages: Lookup[]; domains: Lookup[]; cities: Lookup[] };
 
 export function errorMessage(error: unknown, fallback: string) {
   return error instanceof ApiError && error.message ? error.message : fallback;

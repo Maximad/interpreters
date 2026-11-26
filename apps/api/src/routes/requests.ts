@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { NotificationChannel, type Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { languageLabel } from '../../prisma/seeds/language-catalog';
 import { prisma } from '../plugins/prisma';
 import { languageDirection, languageKey, languagePair, parseLanguagePair } from '../utils/language-pair';
 
@@ -23,8 +24,11 @@ const broadcastSchema = availabilitySchema.extend({
 });
 
 const quoteSchema = z.object({
-  amountAed: z.number().positive(),
-  message: z.string().min(3).optional()
+  amountAed: z.number().positive().max(99999999.99).refine((amount) => Number(amount.toFixed(2)) === amount),
+  durationMinutes: z.number().int().min(1).max(1440),
+  paymentTerms: z.string().trim().min(5).max(500),
+  cancellationTerms: z.string().trim().min(5).max(500),
+  message: z.string().trim().min(3).max(500).optional()
 });
 
 const sessionSelect = { details: true, completed_at: true } satisfies Prisma.BookingSessionSelect;
@@ -117,10 +121,11 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
     const labels = new Map(languages.map(({ name }) => [languageKey(name), name]));
 
     return reply.header('Cache-Control', 'no-store').send({
-      pairs: Array.from(pairs.values(), ([source, target]) => ({
-        source: labels.get(languageKey(source)) ?? source,
-        target: labels.get(languageKey(target)) ?? target
-      }))
+      pairs: Array.from(pairs.values(), ([source, target]) => {
+        const sourceName = labels.get(languageKey(source)) ?? source;
+        const targetName = labels.get(languageKey(target)) ?? target;
+        return { source: sourceName, target: targetName, sourceLabel: languageLabel(sourceName), targetLabel: languageLabel(targetName) };
+      })
     });
   });
 
@@ -219,8 +224,9 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
   app.post('/requests/:id/quotes', { preHandler: app.authorize(['INTERPRETER']) }, async (request, reply) => {
     const params = z.object({ id: z.string().cuid() }).safeParse(request.params);
     const body = quoteSchema.safeParse(request.body);
-    if (!params.success || !body.success) {
-      return reply.status(400).send({ error: { params: params.success ? null : params.error.flatten(), body: body.success ? null : body.error.flatten() } });
+    if (!params.success) return reply.status(400).send({ message: 'Invalid request' });
+    if (!body.success) {
+      return reply.status(400).send({ code: 'INVALID_QUOTE_TERMS', message: 'Enter a valid price, duration, and payment and cancellation terms.' });
     }
 
     const profile = await prisma.interpreterProfile.findUnique({ where: { user_id: request.user.sub } });
@@ -245,14 +251,20 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
       const key = { request_id: params.data.id, interpreter_profile_id: profile.id };
       const where = { request_id_interpreter_profile_id: key };
       const existing = await db.quote.findUnique({ where });
-      const message = body.data.message ?? null;
-      if (existing?.amount_aed.equals(body.data.amountAed) && existing.message === message) return existing;
-
-      const values = { amount_aed: body.data.amountAed, message };
+      const values = {
+        amount_aed: body.data.amountAed,
+        duration_minutes: body.data.durationMinutes,
+        payment_terms: body.data.paymentTerms,
+        cancellation_terms: body.data.cancellationTerms,
+        message: body.data.message ?? null
+      };
+      if (existing?.amount_aed.equals(values.amount_aed) &&
+        existing.duration_minutes === values.duration_minutes && existing.payment_terms === values.payment_terms &&
+        existing.cancellation_terms === values.cancellation_terms && existing.message === values.message) return existing;
       const saved = await db.quote.upsert({
         where,
-        create: { ...key, ...values, client_user_id: recipient.request.client_user_id },
-        update: values
+        create: { ...key, ...values, client_user_id: recipient.request.client_user_id, revision: 1 },
+        update: { ...values, revision: { increment: 1 } }
       });
 
       await db.notification.create({
@@ -287,7 +299,10 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
   app.post('/requests/:id/quotes/:quoteId/accept', { preHandler: app.authorize(['CLIENT']) }, async (request, reply) => {
     const parsed = z.object({ id: z.string().cuid(), quoteId: z.string().cuid() }).safeParse(request.params);
     if (!parsed.success) return reply.status(400).send({ error: parsed.error.flatten() });
-    const body = z.object({ expectedAmountAed: z.number().positive().optional() }).safeParse(request.body ?? {});
+    const body = z.object({
+      expectedAmountAed: z.number().positive().optional(),
+      expectedRevision: z.number().int().positive().optional()
+    }).safeParse(request.body ?? {});
     if (!body.success) return reply.status(400).send({ message: 'Invalid quote confirmation' });
 
     const reqRow = await prisma.request.findFirst({ where: { id: parsed.data.id, client_user_id: request.user.sub } });
@@ -295,7 +310,7 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
 
     const quoteId = parsed.data.quoteId;
     const result = await prisma.$transaction(async (db) => {
-      // Serialize confirmation with edits to the quoted amount.
+      // Serialize confirmation with edits to the quote.
       const open = await db.request.updateMany({ where: { id: reqRow.id, status: 'OPEN' }, data: { status: 'OPEN' } });
       const selected = await db.quote.findFirst({ where: { id: quoteId, request_id: reqRow.id } });
       if (!selected) return 'missing';
@@ -304,7 +319,11 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
         const current = await db.request.findUniqueOrThrow({ where: { id: reqRow.id } });
         return current.status === 'FILLED' && current.filled_quote_id === quoteId ? 'accepted' : 'closed';
       }
-      if (body.data.expectedAmountAed !== undefined && !selected.amount_aed.equals(body.data.expectedAmountAed)) {
+      if (!selected.duration_minutes || !selected.payment_terms?.trim() || !selected.cancellation_terms?.trim()) {
+        return 'terms-required';
+      }
+      if (body.data.expectedRevision !== selected.revision ||
+        (body.data.expectedAmountAed !== undefined && !selected.amount_aed.equals(body.data.expectedAmountAed))) {
         return 'changed';
       }
 
@@ -328,7 +347,8 @@ export const requestRoutes: FastifyPluginAsync = async (app) => {
     });
 
     if (result === 'missing') return reply.status(404).send({ message: 'Quote not found' });
-    if (result === 'changed') return reply.status(409).send({ message: 'The quote price changed. Review the latest quote before accepting.' });
+    if (result === 'terms-required') return reply.status(409).send({ code: 'QUOTE_TERMS_REQUIRED', message: 'The interpreter needs to add the quote terms before you can confirm.' });
+    if (result === 'changed') return reply.status(409).send({ message: 'Review the latest quote before accepting.' });
     if (result === 'closed') return reply.status(409).send({ message: 'This request is no longer open' });
     return { message: 'Quote accepted and request filled', requestId: reqRow.id, acceptedQuoteId: quoteId };
   });

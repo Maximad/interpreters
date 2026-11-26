@@ -3,6 +3,7 @@
 import { useLocale, useTranslations } from 'next-intl';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookingSessionPanel } from '../../../../components/booking-session-panel';
+import { hasQuoteTerms, QuoteTerms } from '../../../../components/quote-terms';
 import { RequestDetails } from '../../../../components/request-details';
 import { Button } from '../../../../components/ui/button';
 import { Link } from '../../../../i18n/navigation';
@@ -12,6 +13,7 @@ import type { BookingRequest, Quote } from '../../../../lib/booking';
 export default function ClientDashboardPage() {
   const t = useTranslations('requestFlow');
   const locale = useLocale();
+  const pilot = useTranslations('pilot');
   const [requests, setRequests] = useState<BookingRequest[] | null>(null);
   const [reviewId, setReviewId] = useState<string | null>(null);
   const [acceptedId, setAcceptedId] = useState<string | null>(null);
@@ -35,7 +37,7 @@ export default function ClientDashboardPage() {
       await requestJson(`/requests/${requestId}/quotes/${quote.id}/accept`, {
         method: 'POST',
         authenticated: true,
-        body: JSON.stringify({ expectedAmountAed: Number(quote.amount_aed) })
+        body: JSON.stringify({ expectedAmountAed: Number(quote.amount_aed), expectedRevision: quote.revision })
       });
       setReviewId(null);
       setAcceptedId(requestId);
@@ -44,7 +46,7 @@ export default function ClientDashboardPage() {
       if (reason instanceof ApiError && reason.status === 409) {
         setReviewId(null);
         await load();
-        setError(t('quoteReviewRequired'));
+        setError(reason.code === 'QUOTE_TERMS_REQUIRED' ? pilot('termsPending') : t('quoteReviewRequired'));
       } else {
         setError(errorMessage(reason, t('quoteError')));
       }
@@ -81,11 +83,15 @@ export default function ClientDashboardPage() {
                     <p className="font-semibold">{price}</p>
                   </div>
                   <p className="text-sm text-slate-700">{t(`quoteStatus.${quote.status}`)}</p>
+                  <QuoteTerms quote={quote} />
                   {quote.message && <p className="whitespace-pre-wrap text-sm" dir="auto">{quote.message}</p>}
                   {item.status === 'OPEN' && quote.status === 'PENDING' && (
+                    !hasQuoteTerms(quote) ? <p className="text-sm text-slate-700">{pilot('termsPending')}</p> :
                     reviewId === quote.id ? (
                       <div className="space-y-3 rounded-md bg-slate-100 p-3">
                         <p className="text-sm">{t('reviewQuote', { price })}</p>
+                        <p className="text-sm">{pilot('clientInvoice')}</p>
+                        <Link className="inline-flex min-h-11 items-center text-sm text-forest underline" href="/pilot">{pilot('policyTitle')}</Link>
                         <div className="flex flex-wrap gap-2">
                           <Button className="flex-1 sm:flex-none" disabled={busy} onClick={() => accept(item.id, quote)} type="button">
                             {t(busy ? 'confirmingQuote' : 'confirmQuote')}

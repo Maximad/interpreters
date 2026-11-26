@@ -95,7 +95,9 @@ for (const [path, heading] of [
   ['/en/admin/profiles', 'Interpreter profiles awaiting review'],
   ['/en/interpreter/profile-wizard', 'Interpreter Marketplace'],
   ['/en/client/broadcast', 'Request an interpreter'],
-  ['/en/client/dashboard', 'Your requests']
+  ['/en/client/dashboard', 'Your requests'],
+  ['/en/pilot', 'The interpreter sends the invoice'],
+  ['/ar/pilot', 'سياسة الحجز التجريبي']
 ]) {
   const page = await fetch(`${web}${path}`);
   assert.equal(page.status, 200, path);
@@ -113,8 +115,16 @@ const russian = options.languages.find((language) => language.name === 'Russian'
 const dubai = options.cities.find((city) => city.name === 'Dubai');
 const abuDhabi = options.cities.find((city) => city.name === 'Abu Dhabi');
 assert.ok(arabic && english && russian && dubai && abuDhabi);
-assert.ok(options.languages.length > 7500);
-assert.ok(options.languages.some(({ name }) => name === 'American Sign Language'));
+assert.equal(options.languages.length, 44);
+assert.ok(options.languages.some(({ name, label }) => name === 'Panjabi' && label === 'Punjabi'));
+assert.ok(options.languages.some(({ name, label }) => name === 'Pushto' && label === 'Pashto'));
+assert.ok(options.languages.some(({ name, label }) => name === 'Nepali (individual language)' && label === 'Nepali'));
+const legacy = { name: 'American Sign Language', id: Number(localSql(
+  `INSERT INTO "Language" (name) VALUES ('American Sign Language')
+   ON CONFLICT (name) DO UPDATE SET name=EXCLUDED.name RETURNING id;`
+).split('\n')[0]) };
+assert.ok(legacy.id > 0);
+assert.ok(options.languages.every(({ name }) => name !== legacy.name));
 
 const requestOptions = await api('/requests/options');
 assert.deepEqual(requestOptions.cities, options.cities);
@@ -156,14 +166,22 @@ const first = await createProfile('Test Interpreter One', arabic, english);
 const second = await createProfile('Test Interpreter Two', arabic, english);
 const reversed = await createProfile('Test Reverse Pair', english, arabic);
 const russianInterpreter = await createProfile('Test Russian Interpreter', russian, english, { city: abuDhabi, remoteEnabled: false });
+const legacyInterpreter = await createProfile('Existing Language Interpreter', english, legacy, { remoteEnabled: false });
+const savedLegacy = await api('/profile/me', { token: legacyInterpreter.token });
+assert.ok(savedLegacy.savedLanguageOptions.some(({ id, name }) => id === legacy.id && name === legacy.name));
+assert.ok((await api('/profile/options')).directoryLanguages.every(({ id }) => id !== legacy.id));
 assert.deepEqual(await availablePairs(abuDhabi.name), []);
 const pending = await api('/admin/profiles/pending', { token: adminToken });
-for (const { profileId } of [first, second, reversed, russianInterpreter]) {
+for (const { profileId } of [first, second, reversed, russianInterpreter, legacyInterpreter]) {
   assert.ok(pending.some((profile) => profile.id === profileId));
   await api(`/admin/profiles/${profileId}/review`, {
     method: 'POST', token: adminToken, payload: { status: 'APPROVED' }
   });
 }
+const approvedOptions = await api('/profile/options');
+assert.equal(approvedOptions.languages.length, 44);
+assert.ok(approvedOptions.directoryLanguages.some(({ id }) => id === legacy.id));
+assert.ok((await availablePairs(dubai.name)).some(({ target }) => target === legacy.name));
 const remotePairs = await availablePairs();
 assert.equal(remotePairs.length, 2);
 assert.ok(remotePairs.some(({ source, target }) => source === 'Arabic' && target === 'English'));
@@ -207,17 +225,38 @@ assert.ok(excluded.every(({ request }) => request.id !== id));
 await waitForMail(first.email, 'New broadcast interpreting request');
 
 const quotePath = `/requests/${id}/quotes`;
-const firstQuote = await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 200 } });
-const repeatedQuote = await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 200 } });
-assert.equal(repeatedQuote.id, firstQuote.id);
-const secondQuote = await api(quotePath, { method: 'POST', token: second.token, payload: { amountAed: 220 } });
+const terms = {
+  durationMinutes: 60,
+  paymentTerms: 'Pay within seven days of the invoice.',
+  cancellationTerms: 'No charge with at least 24 hours of notice.'
+};
+const incomplete = await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 200 }, expected: 400 });
+assert.equal(incomplete.code, 'INVALID_QUOTE_TERMS');
+const original = await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 200, ...terms } });
+const repeatedQuote = await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 200, ...terms } });
+assert.equal(repeatedQuote.id, original.id);
+assert.equal(repeatedQuote.revision, original.revision);
+const firstQuote = await api(quotePath, {
+  method: 'POST', token: first.token, payload: { amountAed: 200, ...terms, durationMinutes: 75 }
+});
+assert.equal(firstQuote.revision, original.revision + 1);
+assert.equal(firstQuote.duration_minutes, 75);
+assert.equal(firstQuote.payment_terms, terms.paymentTerms);
+assert.equal(firstQuote.cancellation_terms, terms.cancellationTerms);
+const secondQuote = await api(quotePath, { method: 'POST', token: second.token, payload: { amountAed: 220, ...terms } });
 await api(`${quotePath}/${firstQuote.id}/accept`, {
-  method: 'POST', token: clientToken, payload: { expectedAmountAed: 199 }, expected: 409
+  method: 'POST', token: clientToken, payload: { expectedAmountAed: 200, expectedRevision: original.revision }, expected: 409
+});
+await api(`${quotePath}/${firstQuote.id}/accept`, {
+  method: 'POST', token: clientToken, payload: { expectedAmountAed: 199, expectedRevision: firstQuote.revision }, expected: 409
+});
+await api(`${quotePath}/${firstQuote.id}/accept`, {
+  method: 'POST', token: clientToken, payload: { expectedAmountAed: 200 }, expected: 409
 });
 
 const decisions = await Promise.all([firstQuote, secondQuote].map((quote) =>
   apiResponse(`${quotePath}/${quote.id}/accept`, {
-    method: 'POST', token: clientToken, payload: { expectedAmountAed: Number(quote.amount_aed) }
+    method: 'POST', token: clientToken, payload: { expectedAmountAed: Number(quote.amount_aed), expectedRevision: quote.revision }
   })));
 assert.deepEqual(decisions.map((response) => response.status).sort(), [200, 409]);
 const accepted = await decisions.find((response) => response.ok).json();
@@ -227,7 +266,7 @@ assert.equal(filled.status, 'FILLED');
 assert.equal(filled.quotes.filter((quote) => quote.status === 'ACCEPTED').length, 1);
 assert.equal(filled.filled_quote_id, accepted.acceptedQuoteId);
 await api(`${quotePath}/${accepted.acceptedQuoteId}/accept`, { method: 'POST', token: clientToken });
-await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 300 }, expected: 409 });
+await api(quotePath, { method: 'POST', token: first.token, payload: { amountAed: 300, ...terms }, expected: 409 });
 
 const [booked, declined] = accepted.acceptedQuoteId === firstQuote.id ? [first, second] : [second, first];
 await api(sessionPath, { method: 'PUT', token: clientToken, payload: { details: 'http://meet.example.test/' }, expected: 400 });
@@ -259,8 +298,14 @@ const onsite = await api('/requests/broadcast', {
   payload: { ...requestDetails, city: dubai.name, onsiteRequired: true, remoteAllowed: false }
 });
 const onsitePath = `/requests/${onsite.request.id}`;
-const onsiteQuote = await api(`${onsitePath}/quotes`, { method: 'POST', token: first.token, payload: { amountAed: 250 } });
-await api(`${onsitePath}/quotes/${onsiteQuote.id}/accept`, { method: 'POST', token: clientToken });
+const onsiteQuote = await api(`${onsitePath}/quotes`, { method: 'POST', token: first.token, payload: { amountAed: 250, ...terms } });
+localSql(`UPDATE "Quote" SET duration_minutes=NULL, payment_terms=NULL, cancellation_terms=NULL, revision=0 WHERE id='${onsiteQuote.id}';`);
+const legacyTerms = await api(`${onsitePath}/quotes/${onsiteQuote.id}/accept`, { method: 'POST', token: clientToken, expected: 409 });
+assert.equal(legacyTerms.code, 'QUOTE_TERMS_REQUIRED');
+const refreshedOnsiteQuote = await api(`${onsitePath}/quotes`, { method: 'POST', token: first.token, payload: { amountAed: 250, ...terms } });
+await api(`${onsitePath}/quotes/${onsiteQuote.id}/accept`, {
+  method: 'POST', token: clientToken, payload: { expectedAmountAed: 250, expectedRevision: refreshedOnsiteQuote.revision }
+});
 const address = 'Conference Centre, Level 2';
 const onsiteSession = await api(`${onsitePath}/session`, { method: 'PUT', token: clientToken, payload: { details: address } });
 assert.equal(onsiteSession.details, address);
@@ -269,7 +314,11 @@ await api('/profile/wizard/step2', { method: 'PUT', token: russianInterpreter.to
   languages: [{ languageId: english.id, direction: 'English->Russian' }]
 } });
 assert.deepEqual(await availablePairs(abuDhabi.name), [{ source: 'English', target: 'Russian' }]);
+await api('/profile/wizard/step2', { method: 'PUT', token: legacyInterpreter.token, payload: {
+  languages: [{ languageId: english.id, direction: `English->${legacy.name}` }]
+} });
+assert.ok((await api('/profile/me', { token: legacyInterpreter.token })).savedLanguageOptions.some(({ id }) => id === legacy.id));
 const directory = await api('/search/interpreters?language=Russian');
 assert.ok(directory.hits.some(({ id }) => id === russianInterpreter.profileId));
 
-console.log('Verified signup, profile review, language catalogue, remote and city coverage, exact matching, quote acceptance, private meeting details and completion.');
+console.log('Verified signup, profile review, curated and legacy languages, remote and city coverage, quote terms and stale-quote protection, private meeting details and completion.');

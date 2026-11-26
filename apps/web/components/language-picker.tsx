@@ -11,6 +11,12 @@ function languageKey(name: string) {
   return name.trim().normalize('NFC').toLowerCase();
 }
 
+export function findLanguage(languages: Lookup[], name: string) {
+  const key = languageKey(name);
+  return languages.find((language) => languageKey(language.name) === key ||
+    (language.label && languageKey(language.label) === key));
+}
+
 function searchKey(name: string) {
   return languageKey(name).normalize('NFD').replace(/\p{Diacritic}/gu, '');
 }
@@ -29,22 +35,21 @@ type Props = {
 
 export function LanguagePicker({ id, name, languages, defaultValue = '', value, onChange, placeholder, required, disabled }: Props) {
   const t = useTranslations('languagePicker');
-  const [draft, setDraft] = useState(defaultValue);
+  const [draft, setDraft] = useState(() => findLanguage(languages, defaultValue)?.label ?? defaultValue);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const input = useRef<HTMLInputElement>(null);
   const listId = id + '-options';
   const text = value ?? draft;
-  const key = languageKey(text);
-  const selected = languages.find((language) => languageKey(language.name) === key);
+  const selected = findLanguage(languages, text);
   const entries = useMemo(() => languages
-    .map((language) => ({ language, key: searchKey(language.name) }))
+    .map((language) => ({ language, key: searchKey(language.label ?? language.name), canonical: searchKey(language.name) }))
     .sort((a, b) => a.key.length - b.key.length), [languages]);
   const query = searchKey(text);
-  const options = open && query
+  const options = open
     ? [
       ...entries.filter((entry) => entry.key.startsWith(query)).slice(0, visibleLimit),
-      ...entries.filter((entry) => entry.key.includes(query) && !entry.key.startsWith(query)).slice(0, visibleLimit)
+      ...entries.filter((entry) => (entry.key.includes(query) || entry.canonical.includes(query)) && !entry.key.startsWith(query)).slice(0, visibleLimit)
     ].slice(0, visibleLimit)
     : [];
   const expanded = options.length > 0;
@@ -64,7 +69,7 @@ export function LanguagePicker({ id, name, languages, defaultValue = '', value, 
   }
 
   function choose(language: Lookup) {
-    update(language.name);
+    update(language.label ?? language.name);
     close();
   }
 
@@ -87,7 +92,7 @@ export function LanguagePicker({ id, name, languages, defaultValue = '', value, 
         required={required}
         onFocus={() => setOpen(true)}
         onBlur={() => {
-          if (selected && selected.name !== text) update(selected.name);
+          if (selected && (selected.label ?? selected.name) !== text) update(selected.label ?? selected.name);
           close();
         }}
         onChange={(event) => {
@@ -122,7 +127,7 @@ export function LanguagePicker({ id, name, languages, defaultValue = '', value, 
               className={`flex min-h-11 cursor-pointer items-center px-3 py-2 text-sm hover:bg-mint ${active === index ? 'bg-mint' : ''}`}
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => choose(language)}>
-              <bdi>{language.name}</bdi>
+              <bdi>{language.label ?? language.name}</bdi>
             </li>
           ))}
         </ul>

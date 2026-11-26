@@ -74,6 +74,14 @@ Retain the previous revision and three image digests. To roll back, select that 
 
 For logs, run `make logs ENV_FILE=/etc/interpreters/interpreters.env`.
 
+## Check the UAE pilot release
+
+After the VPS upgrade, verify `/health`, `/en/pilot`, `/ar/pilot`, and the 44 starter choices from `/api/profile/options`. The release keeps stored language rows and IDs. The directory includes legacy languages used by approved profiles, and the profile wizard can load legacy pairs from the signed-in interpreter’s profile.
+
+Use authorized pilot accounts for one remote and one on-site rehearsal. Check the verification email, interpreter approval, request match, written quote terms, private meeting details, completion, and support email link. Existing confirmed bookings remain accessible. Open quotes from earlier releases need a duration and written payment and cancellation terms before acceptance. A change to the quote requires the client to review the new revision.
+
+The interpreter issues the invoice and confirms payment directly. Record the invoice reference and the two completion confirmations in the private pilot tracker. For a cancellation, no-show, or dispute, use the support mailbox and the terms of the accepted quote to coordinate with both parties.
+
 ## Backups and admin access
 
 Run `ENV_FILE=/etc/interpreters/interpreters.env ./scripts/backup.sh` before a database upgrade. The PostgreSQL dump can restore marketplace data. Meilisearch rebuilds its index from approved profiles. Keep verified backup copies off the VPS.

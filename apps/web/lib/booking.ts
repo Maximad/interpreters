@@ -2,6 +2,10 @@ export type Quote = {
   id: string;
   amount_aed: string;
   message: string | null;
+  duration_minutes: number | null;
+  payment_terms: string | null;
+  cancellation_terms: string | null;
+  revision: number;
   status: 'PENDING' | 'ACCEPTED' | 'REJECTED';
   interpreter_profile?: { user: { full_name: string } };
 };

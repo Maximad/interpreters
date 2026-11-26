@@ -2,7 +2,7 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
-import { LanguagePicker } from '../../../components/language-picker';
+import { findLanguage, LanguagePicker } from '../../../components/language-picker';
 import { Button } from '../../../components/ui/button';
 import { Label } from '../../../components/ui/label';
 import { Select } from '../../../components/ui/select';
@@ -81,13 +81,14 @@ export default function SearchPage() {
       <form className="grid gap-4 rounded-2xl border border-line bg-white p-4 sm:grid-cols-2 sm:p-5 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end"
         onSubmit={(event) => {
           event.preventDefault();
-          setQuery({ filters: draft, page: 1 });
+          const language = findLanguage(options?.directoryLanguages ?? [], draft.languages);
+          setQuery({ filters: { ...draft, languages: language?.name ?? '' }, page: 1 });
         }}>
         {filterFields.map((field) => (
           <div className="grid min-w-0 gap-2" key={field}>
             <Label htmlFor={`search-${field}`}>{t(field)}</Label>
             {field === 'languages' ? (
-              <LanguagePicker id="search-languages" languages={options?.languages ?? []} value={draft.languages}
+              <LanguagePicker id="search-languages" languages={options?.directoryLanguages ?? []} value={draft.languages}
                 onChange={(languages) => setDraft({ ...draft, languages })} placeholder={t('any.languages')} disabled={!options} />
             ) : (
               <Select

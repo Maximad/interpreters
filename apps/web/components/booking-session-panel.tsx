@@ -2,6 +2,7 @@
 
 import { useLocale, useTranslations } from 'next-intl';
 import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
+import { pilotSupportEmail } from '../lib/pilot';
 import { ApiError, requestJson } from '../lib/api';
 import { formatRequestTime, type BookingRequest, type BookingSession } from '../lib/booking';
 import { Button } from './ui/button';
@@ -17,6 +18,7 @@ export function BookingSessionPanel({ request, canEdit = false, onChange }: {
 }) {
   const t = useTranslations('bookingSession');
   const locale = useLocale();
+  const pilot = useTranslations('pilot');
   const id = useId();
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -150,6 +152,13 @@ export function BookingSessionPanel({ request, canEdit = false, onChange }: {
           </div>
         )
       )}
+      <div className="space-y-1 border-t border-slate-200 pt-3 text-sm">
+        <p>{pilot(canEdit ? 'clientInvoice' : 'interpreterInvoice')}</p>
+        <a className="inline-flex min-h-11 items-center text-forest underline"
+          href={`mailto:${pilotSupportEmail}?subject=${encodeURIComponent('Booking ' + request.id)}`}>
+          {pilot('bookingHelp')}
+        </a>
+      </div>
       {error && <p className="text-sm text-red-800" role="alert">{error}</p>}
       {notice && <p className="text-sm text-emerald-800" role="status">{notice}</p>}
     </section>

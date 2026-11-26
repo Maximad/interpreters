@@ -1,7 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { ProfileStatus, UserRole } from '@prisma/client';
 import { z } from 'zod';
+import { languageCatalog, withLanguageLabel } from '../../prisma/seeds/language-catalog';
 import { prisma } from '../plugins/prisma';
+import { languageDirection } from '../utils/language-pair';
 import { upsertInterpreterProfileToIndex } from '../utils/search-index';
 
 const basicsSchema = z.object({
@@ -109,15 +111,37 @@ async function ensureInterpreter(userId: string) {
   return user?.role === UserRole.INTERPRETER;
 }
 
+function savedLanguageOptions(rows: { language_id: number; direction: string }[]) {
+  if (rows.length === 0) return [];
+  const ids = [...new Set(rows.map(({ language_id }) => language_id))];
+  const names = [...new Set(rows.flatMap(({ direction }) => languageDirection(direction) ?? []))];
+  return prisma.language.findMany({
+    where: { OR: [{ id: { in: ids } }, { name: { in: names, mode: 'insensitive' } }] },
+    orderBy: { name: 'asc' }
+  });
+}
+
 export const profileRoutes: FastifyPluginAsync = async (app) => {
   app.get('/profile/options', async () => {
     const orderBy = { name: 'asc' } as const;
-    const [languages, domains, cities] = await Promise.all([
-      prisma.language.findMany({ orderBy }),
+    const [languages, domains, cities, publishedDirections] = await Promise.all([
+      prisma.language.findMany({ where: { name: { in: languageCatalog } }, orderBy }),
       prisma.domain.findMany({ orderBy }),
-      prisma.city.findMany({ orderBy })
+      prisma.city.findMany({ orderBy }),
+      prisma.interpreterLanguage.findMany({
+        where: { interpreter_profile: { status: ProfileStatus.APPROVED } },
+        select: { language_id: true, direction: true },
+        distinct: ['language_id', 'direction']
+      })
     ]);
-    return { languages, domains, cities };
+    const directoryLanguages = new Map([...languages, ...await savedLanguageOptions(publishedDirections)]
+      .map((language) => [language.id, withLanguageLabel(language)]));
+    return {
+      languages: languages.map(withLanguageLabel),
+      directoryLanguages: [...directoryLanguages.values()].sort((a, b) => a.name.localeCompare(b.name)),
+      domains,
+      cities
+    };
   });
 
   app.get('/profile/me', { preHandler: app.authorize(['INTERPRETER']) }, async (request, reply) => {
@@ -127,7 +151,11 @@ export const profileRoutes: FastifyPluginAsync = async (app) => {
     });
 
     if (!profile) return reply.status(404).send({ message: 'Profile not found' });
-    return profile;
+    const savedLanguages = await savedLanguageOptions(profile.languages);
+    return reply.header('Cache-Control', 'private, no-store').send({
+      ...profile,
+      savedLanguageOptions: savedLanguages.map(withLanguageLabel)
+    });
   });
 
   app.put('/profile/wizard/step1', { preHandler: app.authorize(['INTERPRETER']) }, async (request, reply) => {

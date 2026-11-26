@@ -11,7 +11,7 @@ import { Link } from '../../../../i18n/navigation';
 import { ApiError, errorMessage, requestJson, type ProfileOptions } from '../../../../lib/api';
 
 type RequestOptions = Pick<ProfileOptions, 'domains' | 'cities'>;
-type LanguagePair = { source: string; target: string };
+type LanguagePair = { source: string; target: string; sourceLabel?: string; targetLabel?: string };
 type Scope = { onsite: boolean; city: string; domain: string };
 
 export default function BroadcastRequestPage() {
@@ -34,9 +34,9 @@ export default function BroadcastRequestPage() {
     : '';
   const key = query && `${pairAttempt}:${query}`;
   const pairs = availability?.key === key ? availability?.pairs : undefined;
-  const sources = [...new Set(pairs?.map((pair) => pair.source))].sort((a, b) => a.localeCompare(b));
-  const targets = [...new Set(pairs?.filter((pair) => pair.source === source).map((pair) => pair.target))]
-    .sort((a, b) => a.localeCompare(b));
+  const sources = new Map(pairs?.map((pair) => [pair.source, pair.sourceLabel ?? pair.source]));
+  const targets = new Map(pairs?.filter((pair) => pair.source === source)
+    .map((pair) => [pair.target, pair.targetLabel ?? pair.target]));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -68,7 +68,7 @@ export default function BroadcastRequestPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || !targets.includes(target)) return;
+    if (busy || !targets.has(target)) return;
     const formData = new FormData(event.currentTarget);
     const notes = String(formData.get('notes') ?? '').trim();
     setError(null);
@@ -179,14 +179,14 @@ export default function BroadcastRequestPage() {
                   <Label htmlFor="sourceLanguage">{t('sourceLanguage')}</Label>
                   <Select id="sourceLanguage" name="sourceLanguage" value={source} required onChange={(event) => { setSource(event.target.value); setTarget(''); }}>
                     <option value="" disabled>{t('choose')}</option>
-                    {sources.map((name) => <option key={name} value={name}>{name}</option>)}
+                    {[...sources].sort((a, b) => a[1].localeCompare(b[1])).map(([name, label]) => <option key={name} value={name}>{label}</option>)}
                   </Select>
                 </div>
                 <div className="grid min-w-0 gap-1.5">
                   <Label htmlFor="targetLanguage">{t('targetLanguage')}</Label>
                   <Select id="targetLanguage" name="targetLanguage" value={target} required disabled={!source} onChange={(event) => setTarget(event.target.value)}>
                     <option value="" disabled>{t(source ? 'choose' : 'chooseSourceFirst')}</option>
-                    {targets.map((name) => <option key={name} value={name}>{name}</option>)}
+                    {[...targets].sort((a, b) => a[1].localeCompare(b[1])).map(([name, label]) => <option key={name} value={name}>{label}</option>)}
                   </Select>
                 </div>
               </div>

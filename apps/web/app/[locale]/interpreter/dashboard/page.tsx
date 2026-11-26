@@ -4,6 +4,7 @@ import { useLocale, useTranslations } from 'next-intl';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { BookingSessionPanel } from '../../../../components/booking-session-panel';
 import { InterpreterProfileStatus, type ProfileReview } from '../../../../components/interpreter-profile-status';
+import { QuoteTerms } from '../../../../components/quote-terms';
 import { RequestDetails } from '../../../../components/request-details';
 import { Button } from '../../../../components/ui/button';
 import { Input } from '../../../../components/ui/input';
@@ -18,6 +19,7 @@ export default function InterpreterDashboardPage() {
   const t = useTranslations('requestFlow');
   const profile = useTranslations('profileWizard');
   const locale = useLocale();
+  const pilot = useTranslations('pilot');
   const [review, setReview] = useState<ProfileReview | null>();
   const [reviewError, setReviewError] = useState(false);
   const [invitations, setInvitations] = useState<Invitation[] | null>(null);
@@ -48,6 +50,9 @@ export default function InterpreterDashboardPage() {
     if (busy) return;
     const formData = new FormData(event.currentTarget);
     const amountAed = Number(formData.get('amountAed'));
+    const durationMinutes = Number(formData.get('durationMinutes'));
+    const paymentTerms = String(formData.get('paymentTerms') ?? '').trim();
+    const cancellationTerms = String(formData.get('cancellationTerms') ?? '').trim();
     const message = String(formData.get('message') ?? '').trim() || undefined;
     setQuoteFeedback(null);
     if (message && message.length < 3) {
@@ -58,12 +63,14 @@ export default function InterpreterDashboardPage() {
     setError('');
     try {
       await requestJson(`/requests/${requestId}/quotes`, {
-        method: 'POST', authenticated: true, body: JSON.stringify({ amountAed, message })
+        method: 'POST', authenticated: true, body: JSON.stringify({ amountAed, durationMinutes, paymentTerms, cancellationTerms, message })
       });
       setQuoteFeedback({ id: requestId, message: t('quoteSaved'), failed: false });
       await load();
     } catch (reason) {
-      setQuoteFeedback({ id: requestId, message: errorMessage(reason, t('quoteError')), failed: true });
+      const message = reason instanceof ApiError && reason.code === 'INVALID_QUOTE_TERMS'
+        ? pilot('invalidQuote') : errorMessage(reason, t('quoteError'));
+      setQuoteFeedback({ id: requestId, message, failed: true });
     } finally {
       setBusy(false);
     }
@@ -94,9 +101,12 @@ export default function InterpreterDashboardPage() {
               </p>
             )}
             {request.status === 'FILLED' && quote?.status === 'ACCEPTED' && (
-              <BookingSessionPanel request={request} onChange={(session) => {
-                setInvitations((current) => current?.map((item) => item.id === id ? { ...item, request: { ...item.request, session } } : item) ?? null);
-              }} />
+              <>
+                <QuoteTerms quote={quote} />
+                <BookingSessionPanel request={request} onChange={(session) => {
+                  setInvitations((current) => current?.map((item) => item.id === id ? { ...item, request: { ...item.request, session } } : item) ?? null);
+                }} />
+              </>
             )}
             {quoteFeedback?.id === request.id && (
               <p className={quoteFeedback.failed ? 'text-sm text-red-800' : 'text-sm text-emerald-800'} role={quoteFeedback.failed ? 'alert' : 'status'}>
@@ -104,11 +114,17 @@ export default function InterpreterDashboardPage() {
               </p>
             )}
             {request.status === 'OPEN' && (
-              <form className="grid min-w-0 max-w-md gap-2" key={JSON.stringify([quote?.amount_aed, quote?.message])} onSubmit={(event) => submit(request.id, event)}>
+              <form className="grid min-w-0 max-w-md gap-2" key={quote?.revision ?? 0} onSubmit={(event) => submit(request.id, event)}>
                 <Label htmlFor={`amount-${id}`}>{t('quoteAmount')}</Label>
-                <Input id={`amount-${id}`} type="number" inputMode="decimal" name="amountAed" min="0.01" step="0.01" defaultValue={quote?.amount_aed} required />
+                <Input id={`amount-${id}`} type="number" inputMode="decimal" name="amountAed" min="0.01" max="99999999.99" step="0.01" defaultValue={quote?.amount_aed} required />
+                <Label htmlFor={`duration-${id}`}>{pilot('durationMinutes')}</Label>
+                <Input id={`duration-${id}`} type="number" inputMode="numeric" name="durationMinutes" min="1" max="1440" defaultValue={quote?.duration_minutes ?? ''} required />
+                <Label htmlFor={`payment-${id}`}>{pilot('paymentTerms')}</Label>
+                <Textarea id={`payment-${id}`} name="paymentTerms" defaultValue={quote?.payment_terms ?? ''} placeholder={pilot('paymentExample')} rows={2} minLength={5} maxLength={500} required />
+                <Label htmlFor={`cancellation-${id}`}>{pilot('cancellationTerms')}</Label>
+                <Textarea id={`cancellation-${id}`} name="cancellationTerms" defaultValue={quote?.cancellation_terms ?? ''} placeholder={pilot('cancellationExample')} rows={2} minLength={5} maxLength={500} required />
                 <Label htmlFor={`message-${id}`}>{t('optionalMessage')}</Label>
-                <Textarea id={`message-${id}`} name="message" defaultValue={quote?.message ?? ''} rows={2} />
+                <Textarea id={`message-${id}`} name="message" defaultValue={quote?.message ?? ''} rows={2} minLength={3} maxLength={500} />
                 <Button type="submit" disabled={busy}>{t(quote ? 'updateQuote' : 'submitQuote')}</Button>
               </form>
             )}

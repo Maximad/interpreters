@@ -148,7 +148,42 @@
       }
     }
   },
+  "pilot": {
+    "policyTitle": "Pilot booking policy",
+    "contactSupport": "Contact support",
+    "bookingHelp": "Get help with this booking",
+    "clientInvoice": "Your interpreter invoices you directly. Follow the payment terms in the accepted quote.",
+    "interpreterInvoice": "Send your invoice directly to the client using the payment terms you quoted.",
+    "termsPending": "This quote needs payment, cancellation, and duration details before it can be accepted.",
+    "invalidQuote": "Enter a valid total, duration, payment terms, and cancellation terms.",
+    "duration": "Session duration",
+    "durationMinutes": "Duration in minutes",
+    "durationValue": "{minutes, plural, one {# minute} other {# minutes}}",
+    "paymentTerms": "Payment terms",
+    "paymentExample": "Example: Pay within 7 days of receiving the invoice.",
+    "cancellationTerms": "Cancellation terms",
+    "cancellationExample": "Example: No charge for cancellations at least 24 hours before the session.",
+    "policy": {
+      "payments": {
+        "title": "Quotes and payments",
+        "body": "Nass coordinates the booking. The interpreter sends the invoice, collects payment, and confirms receipt. Review the total in AED, session duration, payment terms, and cancellation terms before accepting the quote."
+      },
+      "changes": {
+        "title": "Changes, cancellations, and missed sessions",
+        "body": "If you need to change or cancel a booking, or if someone misses the session, contact the other party and Nass support as soon as possible. Include the booking reference. The accepted quote sets the cancellation terms for your booking."
+      },
+      "disputes": {
+        "title": "Booking and payment disputes",
+        "body": "Nass support can help both parties resolve a booking issue. Contact the interpreter who issued the invoice for any payment correction or refund. Include the booking reference when asking Nass for help."
+      },
+      "privacy": {
+        "title": "Booking privacy",
+        "body": "Nass uses account and booking information to coordinate the pilot and respond to support requests. Approved interpreter profiles are visible in the directory. Meeting links and addresses appear in the dashboards of the client and booked interpreter. Keep bank details and confidential meeting material out of request notes and quotes."
+      }
+    }
+  },
   "languagePicker": {
+    "suggestLanguage": "Suggest a language",
     "search": "Search languages",
     "suggestions": "Matching languages",
     "noResults": "No matching languages. Try a different spelling.",

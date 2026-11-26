@@ -213,6 +213,10 @@ model Quote {
   amount_aed             Decimal            @db.Decimal(10, 2)
   status                 QuoteStatus        @default(PENDING)
   message                String?
+  duration_minutes       Int?
+  payment_terms          String?
+  cancellation_terms     String?
+  revision               Int                @default(0)
   created_at             DateTime           @default(now())
   request                Request            @relation(fields: [request_id], references: [id])
   interpreter_profile    InterpreterProfile @relation(fields: [interpreter_profile_id], references: [id])

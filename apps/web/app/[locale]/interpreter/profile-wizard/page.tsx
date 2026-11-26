@@ -10,12 +10,13 @@ import { Label } from '../../../../components/ui/label';
 import { Select } from '../../../../components/ui/select';
 import { Textarea } from '../../../../components/ui/textarea';
 import { Link } from '../../../../i18n/navigation';
-import { ApiError, errorMessage, requestJson, type ProfileOptions } from '../../../../lib/api';
+import { ApiError, errorMessage, requestJson, type Lookup, type ProfileOptions } from '../../../../lib/api';
 
 type Profile = ProfileReview & {
   headline: string | null;
   bio: string | null;
   user: { full_name: string };
+  savedLanguageOptions: Lookup[];
   languages: { direction: string; proficiency_level: string | null }[];
   domains: { domain_id: number }[];
   cities: { city_id: number }[];
@@ -30,6 +31,7 @@ type Profile = ProfileReview & {
 
 export default function ProfileWizardPage() {
   const t = useTranslations('profileWizard');
+  const languagePicker = useTranslations('languagePicker');
   const auth = useTranslations('auth');
   const [step, setStep] = useState(1);
   const [options, setOptions] = useState<ProfileOptions | null>(null);
@@ -75,7 +77,9 @@ export default function ProfileWizardPage() {
     );
   }
 
-  const lookups = options;
+  const languagesById = new Map([...options.languages, ...(profile?.savedLanguageOptions ?? [])]
+    .map((language) => [language.id, language]));
+  const languageOptions = [...languagesById.values()];
   const submitting = step === 5 && profile?.status !== 'APPROVED';
   const homeCity = options.cities.find((city) =>
     profile?.bio === `Based in ${city.name}` || profile?.bio === `Based in city #${city.id}`);
@@ -93,8 +97,8 @@ export default function ProfileWizardPage() {
       case 2: {
         const targets = formData.getAll('target');
         const languages = formData.getAll('source').map((source, index) => {
-          const from = lookups.languages.find((item) => item.id === Number(source));
-          const to = lookups.languages.find((item) => item.id === Number(targets[index]));
+          const from = languagesById.get(Number(source));
+          const to = languagesById.get(Number(targets[index]));
           if (!from || !to || from.id === to.id) return null;
           return {
             languageId: from.id,
@@ -185,7 +189,7 @@ export default function ProfileWizardPage() {
                 return (
                   <div className="grid min-w-0 gap-1.5" key={field}>
                     <Label htmlFor={id}>{t(label)}</Label>
-                    <LanguagePicker id={id} name={field} languages={lookups.languages} defaultValue={name?.trim()} required />
+                    <LanguagePicker id={id} name={field} languages={languageOptions} defaultValue={name?.trim()} required />
                   </div>
                 );
               })}
@@ -194,6 +198,7 @@ export default function ProfileWizardPage() {
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={() => setLanguageRows(languageRows + 1)}>{t('addPair')}</Button>
             {languageRows > 1 && <Button type="button" onClick={() => setLanguageRows(languageRows - 1)}>{t('removeLast')}</Button>}
+            <a className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-forest underline" href="mailto:interpreters@nass.life?subject=Language%20suggestion">{languagePicker('suggestLanguage')}</a>
           </div>
         </>}
         {step === 3 && <>
